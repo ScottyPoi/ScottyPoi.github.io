@@ -1,0 +1,13 @@
+pages: [
+    {
+        name: 'Home',
+        url: '/',
+        title: 'SSZ Home Page'
+    },
+    {
+        name: 'About',
+        url: '/about',
+        title: 'What is SSZ'
+    }
+
+]
