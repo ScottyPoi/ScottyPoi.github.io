@@ -1,3 +1,6 @@
 [submodule "eth2specs"]
 	path = eth2specs
 	url = https://github.com/ethereum/eth2.0-specs.git
+[submodule "playground"]
+	path = playground
+	url = https://github.com/ChainSafe/simpleserialize.com.git
