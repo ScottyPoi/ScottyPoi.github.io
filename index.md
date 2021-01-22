@@ -1,5 +1,6 @@
 ---
 layout: page
+strapline: Serialize data with SSZ
 ---
 
 # SSZ 
