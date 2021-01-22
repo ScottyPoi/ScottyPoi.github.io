@@ -1,0 +1,734 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="ethereum-20-phase-0--honest-validator">Ethereum 2.0 Phase 0 – Honest Validator</h1>
+
+<p>This is an accompanying document to <a href="/eth2specs/specs/phase0/beacon-chain.html">Ethereum 2.0 Phase 0 – The Beacon Chain</a>, which describes the expected actions of a “validator” participating in the Ethereum 2.0 protocol.</p>
+
+<h2 id="table-of-contents">Table of contents</h2>
+
+<!-- TOC -->
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+<ul>
+  <li><a href="#introduction">Introduction</a></li>
+  <li><a href="#prerequisites">Prerequisites</a></li>
+  <li><a href="#constants">Constants</a>
+    <ul>
+      <li><a href="#misc">Misc</a></li>
+    </ul>
+  </li>
+  <li><a href="#becoming-a-validator">Becoming a validator</a>
+    <ul>
+      <li><a href="#initialization">Initialization</a>
+        <ul>
+          <li><a href="#bls-public-key">BLS public key</a></li>
+          <li><a href="#bls-withdrawal-key">BLS withdrawal key</a></li>
+        </ul>
+      </li>
+      <li><a href="#submit-deposit">Submit deposit</a></li>
+      <li><a href="#process-deposit">Process deposit</a></li>
+      <li><a href="#validator-index">Validator index</a></li>
+      <li><a href="#activation">Activation</a></li>
+    </ul>
+  </li>
+  <li><a href="#validator-assignments">Validator assignments</a>
+    <ul>
+      <li><a href="#lookahead">Lookahead</a></li>
+    </ul>
+  </li>
+  <li><a href="#beacon-chain-responsibilities">Beacon chain responsibilities</a>
+    <ul>
+      <li><a href="#block-proposal">Block proposal</a>
+        <ul>
+          <li><a href="#preparing-for-a-beaconblock">Preparing for a <code class="language-plaintext highlighter-rouge">BeaconBlock</code></a>
+            <ul>
+              <li><a href="#slot">Slot</a></li>
+              <li><a href="#proposer-index">Proposer index</a></li>
+              <li><a href="#parent-root">Parent root</a></li>
+            </ul>
+          </li>
+          <li><a href="#constructing-the-beaconblockbody">Constructing the <code class="language-plaintext highlighter-rouge">BeaconBlockBody</code></a>
+            <ul>
+              <li><a href="#randao-reveal">Randao reveal</a></li>
+              <li><a href="#eth1-data">Eth1 Data</a>
+                <ul>
+                  <li><a href="#eth1block"><code class="language-plaintext highlighter-rouge">Eth1Block</code></a></li>
+                  <li><a href="#get_eth1_data"><code class="language-plaintext highlighter-rouge">get_eth1_data</code></a></li>
+                </ul>
+              </li>
+              <li><a href="#proposer-slashings">Proposer slashings</a></li>
+              <li><a href="#attester-slashings">Attester slashings</a></li>
+              <li><a href="#attestations">Attestations</a></li>
+              <li><a href="#deposits">Deposits</a></li>
+              <li><a href="#voluntary-exits">Voluntary exits</a></li>
+            </ul>
+          </li>
+          <li><a href="#packaging-into-a-signedbeaconblock">Packaging into a <code class="language-plaintext highlighter-rouge">SignedBeaconBlock</code></a>
+            <ul>
+              <li><a href="#state-root">State root</a></li>
+              <li><a href="#signature">Signature</a></li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+      <li><a href="#attesting">Attesting</a>
+        <ul>
+          <li><a href="#attestation-data">Attestation data</a>
+            <ul>
+              <li><a href="#general">General</a></li>
+              <li><a href="#lmd-ghost-vote">LMD GHOST vote</a></li>
+              <li><a href="#ffg-vote">FFG vote</a></li>
+            </ul>
+          </li>
+          <li><a href="#construct-attestation">Construct attestation</a>
+            <ul>
+              <li><a href="#data">Data</a></li>
+              <li><a href="#aggregation-bits">Aggregation bits</a></li>
+              <li><a href="#aggregate-signature">Aggregate signature</a></li>
+            </ul>
+          </li>
+          <li><a href="#broadcast-attestation">Broadcast attestation</a></li>
+        </ul>
+      </li>
+      <li><a href="#attestation-aggregation">Attestation aggregation</a>
+        <ul>
+          <li><a href="#aggregation-selection">Aggregation selection</a></li>
+          <li><a href="#construct-aggregate">Construct aggregate</a>
+            <ul>
+              <li><a href="#data-1">Data</a></li>
+              <li><a href="#aggregation-bits-1">Aggregation bits</a></li>
+              <li><a href="#aggregate-signature-1">Aggregate signature</a></li>
+            </ul>
+          </li>
+          <li><a href="#broadcast-aggregate">Broadcast aggregate</a>
+            <ul>
+              <li><a href="#aggregateandproof"><code class="language-plaintext highlighter-rouge">AggregateAndProof</code></a></li>
+              <li><a href="#signedaggregateandproof"><code class="language-plaintext highlighter-rouge">SignedAggregateAndProof</code></a></li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li><a href="#phase-0-attestation-subnet-stability">Phase 0 attestation subnet stability</a></li>
+  <li><a href="#how-to-avoid-slashing">How to avoid slashing</a>
+    <ul>
+      <li><a href="#proposer-slashing">Proposer slashing</a></li>
+      <li><a href="#attester-slashing">Attester slashing</a></li>
+    </ul>
+  </li>
+  <li><a href="#protection-best-practices">Protection best practices</a></li>
+</ul>
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+<!-- /TOC -->
+
+<h2 id="introduction">Introduction</h2>
+
+<p>This document represents the expected behavior of an “honest validator” with respect to Phase 0 of the Ethereum 2.0 protocol. This document does not distinguish between a “node” (i.e. the functionality of following and reading the beacon chain) and a “validator client” (i.e. the functionality of actively participating in consensus). The separation of concerns between these (potentially) two pieces of software is left as a design decision that is out of scope.</p>
+
+<p>A validator is an entity that participates in the consensus of the Ethereum 2.0 protocol. This is an optional role for users in which they can post ETH as collateral and verify and attest to the validity of blocks to seek financial returns in exchange for building and securing the protocol. This is similar to proof-of-work networks in which miners provide collateral in the form of hardware/hash-power to seek returns in exchange for building and securing the protocol.</p>
+
+<h2 id="prerequisites">Prerequisites</h2>
+
+<p>All terminology, constants, functions, and protocol mechanics defined in the <a href="/eth2specs/specs/phase0/beacon-chain.html">Phase 0 – The Beacon Chain</a> and <a href="/eth2specs/specs/phase0/deposit-contract.html">Phase 0 – Deposit Contract</a> doc are requisite for this document and used throughout. Please see the Phase 0 doc before continuing and use as a reference throughout.</p>
+
+<h2 id="constants">Constants</h2>
+
+<h3 id="misc">Misc</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+      <th style="text-align: center">Unit</th>
+      <th style="text-align: center">Duration</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">TARGET_AGGREGATORS_PER_COMMITTEE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">2**4</code> (= 16)</td>
+      <td style="text-align: center">validators</td>
+      <td style="text-align: center"> </td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">RANDOM_SUBNETS_PER_VALIDATOR</code></td>
+      <td><code class="language-plaintext highlighter-rouge">2**0</code> (= 1)</td>
+      <td style="text-align: center">subnets</td>
+      <td style="text-align: center"> </td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">EPOCHS_PER_RANDOM_SUBNET_SUBSCRIPTION</code></td>
+      <td><code class="language-plaintext highlighter-rouge">2**8</code> (= 256)</td>
+      <td style="text-align: center">epochs</td>
+      <td style="text-align: center">~27 hours</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">ATTESTATION_SUBNET_COUNT</code></td>
+      <td><code class="language-plaintext highlighter-rouge">64</code></td>
+      <td style="text-align: center">The number of attestation subnets used in the gossipsub protocol.</td>
+      <td style="text-align: center"> </td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="becoming-a-validator">Becoming a validator</h2>
+
+<h3 id="initialization">Initialization</h3>
+
+<p>A validator must initialize many parameters locally before submitting a deposit and joining the validator registry.</p>
+
+<h4 id="bls-public-key">BLS public key</h4>
+
+<p>Validator public keys are <a href="/eth2specs/specs/phase0/beacon-chain.html#bls-signatures">G1 points</a> on the <a href="https://z.cash/blog/new-snark-curve">BLS12-381 curve</a>. A private key, <code class="language-plaintext highlighter-rouge">privkey</code>, must be securely generated along with the resultant <code class="language-plaintext highlighter-rouge">pubkey</code>. This <code class="language-plaintext highlighter-rouge">privkey</code> must be “hot”, that is, constantly available to sign data throughout the lifetime of the validator.</p>
+
+<h4 id="bls-withdrawal-key">BLS withdrawal key</h4>
+
+<p>A secondary withdrawal private key, <code class="language-plaintext highlighter-rouge">withdrawal_privkey</code>, must also be securely generated along with the resultant <code class="language-plaintext highlighter-rouge">withdrawal_pubkey</code>. This <code class="language-plaintext highlighter-rouge">withdrawal_privkey</code> does not have to be available for signing during the normal lifetime of a validator and can live in “cold storage”.</p>
+
+<p>The validator constructs their <code class="language-plaintext highlighter-rouge">withdrawal_credentials</code> via the following:</p>
+
+<ul>
+  <li>Set <code class="language-plaintext highlighter-rouge">withdrawal_credentials[:1] == BLS_WITHDRAWAL_PREFIX</code>.</li>
+  <li>Set <code class="language-plaintext highlighter-rouge">withdrawal_credentials[1:] == hash(withdrawal_pubkey)[1:]</code>.</li>
+</ul>
+
+<h3 id="submit-deposit">Submit deposit</h3>
+
+<p>In Phase 0, all incoming validator deposits originate from the Ethereum 1.0 chain defined by <code class="language-plaintext highlighter-rouge">DEPOSIT_CHAIN_ID</code> and <code class="language-plaintext highlighter-rouge">DEPOSIT_NETWORK_ID</code>. Deposits are made to the <a href="/eth2specs/specs/phase0/deposit-contract.html">deposit contract</a> located at <code class="language-plaintext highlighter-rouge">DEPOSIT_CONTRACT_ADDRESS</code>.</p>
+
+<p>To submit a deposit:</p>
+
+<ul>
+  <li>Pack the validator’s <a href="#initialization">initialization parameters</a> into <code class="language-plaintext highlighter-rouge">deposit_data</code>, a <a href="/eth2specs/specs/phase0/beacon-chain.html#depositdata"><code class="language-plaintext highlighter-rouge">DepositData</code></a> SSZ object.</li>
+  <li>Let <code class="language-plaintext highlighter-rouge">amount</code> be the amount in Gwei to be deposited by the validator where <code class="language-plaintext highlighter-rouge">amount &gt;= MIN_DEPOSIT_AMOUNT</code>.</li>
+  <li>Set <code class="language-plaintext highlighter-rouge">deposit_data.pubkey</code> to validator’s <code class="language-plaintext highlighter-rouge">pubkey</code>.</li>
+  <li>Set <code class="language-plaintext highlighter-rouge">deposit_data.withdrawal_credentials</code> to <code class="language-plaintext highlighter-rouge">withdrawal_credentials</code>.</li>
+  <li>Set <code class="language-plaintext highlighter-rouge">deposit_data.amount</code> to <code class="language-plaintext highlighter-rouge">amount</code>.</li>
+  <li>Let <code class="language-plaintext highlighter-rouge">deposit_message</code> be a <code class="language-plaintext highlighter-rouge">DepositMessage</code> with all the <code class="language-plaintext highlighter-rouge">DepositData</code> contents except the <code class="language-plaintext highlighter-rouge">signature</code>.</li>
+  <li>Let <code class="language-plaintext highlighter-rouge">signature</code> be the result of <code class="language-plaintext highlighter-rouge">bls.Sign</code> of the <code class="language-plaintext highlighter-rouge">compute_signing_root(deposit_message, domain)</code> with <code class="language-plaintext highlighter-rouge">domain=compute_domain(DOMAIN_DEPOSIT)</code>. (<em>Warning</em>: Deposits <em>must</em> be signed with <code class="language-plaintext highlighter-rouge">GENESIS_FORK_VERSION</code>, calling <code class="language-plaintext highlighter-rouge">compute_domain</code> without a second argument defaults to the correct version).</li>
+  <li>Let <code class="language-plaintext highlighter-rouge">deposit_data_root</code> be <code class="language-plaintext highlighter-rouge">hash_tree_root(deposit_data)</code>.</li>
+  <li>Send a transaction on the Ethereum 1.0 chain to <code class="language-plaintext highlighter-rouge">DEPOSIT_CONTRACT_ADDRESS</code> executing <code class="language-plaintext highlighter-rouge">def deposit(pubkey: bytes[48], withdrawal_credentials: bytes[32], signature: bytes[96], deposit_data_root: bytes32)</code> along with a deposit of <code class="language-plaintext highlighter-rouge">amount</code> Gwei.</li>
+</ul>
+
+<p><em>Note</em>: Deposits made for the same <code class="language-plaintext highlighter-rouge">pubkey</code> are treated as for the same validator. A singular <code class="language-plaintext highlighter-rouge">Validator</code> will be added to <code class="language-plaintext highlighter-rouge">state.validators</code> with each additional deposit amount added to the validator’s balance. A validator can only be activated when total deposits for the validator pubkey meet or exceed <code class="language-plaintext highlighter-rouge">MAX_EFFECTIVE_BALANCE</code>.</p>
+
+<h3 id="process-deposit">Process deposit</h3>
+
+<p>Deposits cannot be processed into the beacon chain until the Eth1 block in which they were deposited or any of its descendants is added to the beacon chain <code class="language-plaintext highlighter-rouge">state.eth1_data</code>. This takes <em>a minimum</em> of <code class="language-plaintext highlighter-rouge">ETH1_FOLLOW_DISTANCE</code> Eth1 blocks (~8 hours) plus <code class="language-plaintext highlighter-rouge">EPOCHS_PER_ETH1_VOTING_PERIOD</code> epochs (~6.8 hours). Once the requisite Eth1 data is added, the deposit will normally be added to a beacon chain block and processed into the <code class="language-plaintext highlighter-rouge">state.validators</code> within an epoch or two. The validator is then in a queue to be activated.</p>
+
+<h3 id="validator-index">Validator index</h3>
+
+<p>Once a validator has been processed and added to the beacon state’s <code class="language-plaintext highlighter-rouge">validators</code>, the validator’s <code class="language-plaintext highlighter-rouge">validator_index</code> is defined by the index into the registry at which the <a href="/eth2specs/specs/phase0/beacon-chain.html#validator"><code class="language-plaintext highlighter-rouge">ValidatorRecord</code></a> contains the <code class="language-plaintext highlighter-rouge">pubkey</code> specified in the validator’s deposit. A validator’s <code class="language-plaintext highlighter-rouge">validator_index</code> is guaranteed to not change from the time of initial deposit until the validator exits and fully withdraws. This <code class="language-plaintext highlighter-rouge">validator_index</code> is used throughout the specification to dictate validator roles and responsibilities at any point and should be stored locally.</p>
+
+<h3 id="activation">Activation</h3>
+
+<p>In normal operation, the validator is quickly activated, at which point the validator is added to the shuffling and begins validation after an additional <code class="language-plaintext highlighter-rouge">MAX_SEED_LOOKAHEAD</code> epochs (25.6 minutes).</p>
+
+<p>The function <a href="/eth2specs/specs/phase0/beacon-chain.html#is_active_validator"><code class="language-plaintext highlighter-rouge">is_active_validator</code></a> can be used to check if a validator is active during a given epoch. Usage is as follows:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">check_if_validator_active</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">validator_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="n">validator</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">[</span><span class="n">validator_index</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">is_active_validator</span><span class="p">(</span><span class="n">validator</span><span class="p">,</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+</code></pre></div></div>
+
+<p>Once a validator is activated, the validator is assigned <a href="#beacon-chain-responsibilities">responsibilities</a> until exited.</p>
+
+<p><em>Note</em>: There is a maximum validator churn per finalized epoch, so the delay until activation is variable depending upon finality, total active validator balance, and the number of validators in the queue to be activated.</p>
+
+<h2 id="validator-assignments">Validator assignments</h2>
+
+<p>A validator can get committee assignments for a given epoch using the following helper via <code class="language-plaintext highlighter-rouge">get_committee_assignment(state, epoch, validator_index)</code> where <code class="language-plaintext highlighter-rouge">epoch &lt;= next_epoch</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_committee_assignment</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+                             <span class="n">epoch</span><span class="p">:</span> <span class="n">Epoch</span><span class="p">,</span>
+                             <span class="n">validator_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span>
+                             <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="n">ValidatorIndex</span><span class="p">],</span> <span class="n">CommitteeIndex</span><span class="p">,</span> <span class="n">Slot</span><span class="p">]]:</span>
+    <span class="s">"""
+    Return the committee assignment in the ``epoch`` for ``validator_index``.
+    ``assignment`` returned is a tuple of the following form:
+        * ``assignment[0]`` is the list of validators in the committee
+        * ``assignment[1]`` is the index to which the committee is assigned
+        * ``assignment[2]`` is the slot at which the committee is assigned
+    Return None if no assignment.
+    """</span>
+    <span class="n">next_epoch</span> <span class="o">=</span> <span class="n">Epoch</span><span class="p">(</span><span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">epoch</span> <span class="o">&lt;=</span> <span class="n">next_epoch</span>
+
+    <span class="n">start_slot</span> <span class="o">=</span> <span class="n">compute_start_slot_at_epoch</span><span class="p">(</span><span class="n">epoch</span><span class="p">)</span>
+    <span class="n">committee_count_per_slot</span> <span class="o">=</span> <span class="n">get_committee_count_per_slot</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">epoch</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">slot</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">start_slot</span><span class="p">,</span> <span class="n">start_slot</span> <span class="o">+</span> <span class="n">SLOTS_PER_EPOCH</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">committee_count_per_slot</span><span class="p">):</span>
+            <span class="n">committee</span> <span class="o">=</span> <span class="n">get_beacon_committee</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">Slot</span><span class="p">(</span><span class="n">slot</span><span class="p">),</span> <span class="n">CommitteeIndex</span><span class="p">(</span><span class="n">index</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">validator_index</span> <span class="ow">in</span> <span class="n">committee</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">committee</span><span class="p">,</span> <span class="n">CommitteeIndex</span><span class="p">(</span><span class="n">index</span><span class="p">),</span> <span class="n">Slot</span><span class="p">(</span><span class="n">slot</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">None</span>
+</code></pre></div></div>
+
+<p>A validator can use the following function to see if they are supposed to propose during a slot. This function can only be run with a <code class="language-plaintext highlighter-rouge">state</code> of the slot in question. Proposer selection is only stable within the context of the current epoch.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">is_proposer</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">validator_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">get_beacon_proposer_index</span><span class="p">(</span><span class="n">state</span><span class="p">)</span> <span class="o">==</span> <span class="n">validator_index</span>
+</code></pre></div></div>
+
+<p><em>Note</em>: To see if a validator is assigned to propose during the slot, the beacon state must be in the epoch in question. At the epoch boundaries, the validator must run an epoch transition into the epoch to successfully check the proposal assignment of the first slot.</p>
+
+<p><em>Note</em>: <code class="language-plaintext highlighter-rouge">BeaconBlock</code> proposal is distinct from beacon committee assignment, and in a given epoch each responsibility might occur at a different slot.</p>
+
+<h3 id="lookahead">Lookahead</h3>
+
+<p>The beacon chain shufflings are designed to provide a minimum of 1 epoch lookahead
+on the validator’s upcoming committee assignments for attesting dictated by the shuffling and slot.
+Note that this lookahead does not apply to proposing, which must be checked during the epoch in question.</p>
+
+<p><code class="language-plaintext highlighter-rouge">get_committee_assignment</code> should be called at the start of each epoch
+to get the assignment for the next epoch (<code class="language-plaintext highlighter-rouge">current_epoch + 1</code>).
+A validator should plan for future assignments by noting their assigned attestation
+slot and joining the committee index attestation subnet related to their committee assignment.</p>
+
+<p>Specifically a validator should:</p>
+<ul>
+  <li>Call <code class="language-plaintext highlighter-rouge">get_committee_assignment(state, next_epoch, validator_index)</code> when checking for next epoch assignments.</li>
+  <li>Calculate the committees per slot for the next epoch: <code class="language-plaintext highlighter-rouge">committees_per_slot = get_committee_count_per_slot(state, next_epoch)</code></li>
+  <li>Calculate the subnet index: <code class="language-plaintext highlighter-rouge">subnet_id = compute_subnet_for_attestation(committees_per_slot, slot, committee_index)</code></li>
+  <li>Find peers of the pubsub topic <code class="language-plaintext highlighter-rouge">beacon_attestation_{subnet_id}</code>.
+    <ul>
+      <li>If an <em>insufficient</em> number of current peers are subscribed to the topic, the validator must discover new peers on this topic. Via the discovery protocol, find peers with an ENR containing the <code class="language-plaintext highlighter-rouge">attnets</code> entry such that <code class="language-plaintext highlighter-rouge">ENR["attnets"][subnet_id] == True</code>. Then validate that the peers are still persisted on the desired topic by requesting <code class="language-plaintext highlighter-rouge">GetMetaData</code> and checking the resulting <code class="language-plaintext highlighter-rouge">attnets</code> field.</li>
+      <li>If the validator is assigned to be an aggregator for the slot (see <code class="language-plaintext highlighter-rouge">is_aggregator()</code>), then subscribe to the topic.</li>
+    </ul>
+  </li>
+</ul>
+
+<p><em>Note</em>: If the validator is <em>not</em> assigned to be an aggregator, the validator only needs sufficient number of peers on the topic to be able to publish messages. The validator does not need to <em>subscribe</em> and listen to all messages on the topic.</p>
+
+<h2 id="beacon-chain-responsibilities">Beacon chain responsibilities</h2>
+
+<p>A validator has two primary responsibilities to the beacon chain: <a href="#block-proposal">proposing blocks</a> and <a href="#attestations-1">creating attestations</a>. Proposals happen infrequently, whereas attestations should be created once per epoch.</p>
+
+<h3 id="block-proposal">Block proposal</h3>
+
+<p>A validator is expected to propose a <a href="/eth2specs/specs/phase0/beacon-chain.html#signedbeaconblock"><code class="language-plaintext highlighter-rouge">SignedBeaconBlock</code></a> at
+the beginning of any slot during which <code class="language-plaintext highlighter-rouge">is_proposer(state, validator_index)</code> returns <code class="language-plaintext highlighter-rouge">True</code>.
+To propose, the validator selects the <code class="language-plaintext highlighter-rouge">BeaconBlock</code>, <code class="language-plaintext highlighter-rouge">parent</code>,
+that in their view of the fork choice is the head of the chain during <code class="language-plaintext highlighter-rouge">slot - 1</code>.
+The validator creates, signs, and broadcasts a <code class="language-plaintext highlighter-rouge">block</code> that is a child of <code class="language-plaintext highlighter-rouge">parent</code>
+that satisfies a valid <a href="/eth2specs/specs/phase0/beacon-chain.html#beacon-chain-state-transition-function">beacon chain state transition</a>.</p>
+
+<p>There is one proposer per slot, so if there are N active validators any individual validator
+will on average be assigned to propose once per N slots (e.g. at 312,500 validators = 10 million ETH, that’s once per ~6 weeks).</p>
+
+<p><em>Note</em>: In this section, <code class="language-plaintext highlighter-rouge">state</code> is the state of the slot for the block proposal <em>without</em> the block yet applied.
+That is, <code class="language-plaintext highlighter-rouge">state</code> is the <code class="language-plaintext highlighter-rouge">previous_state</code> processed through any empty slots up to the assigned slot using <code class="language-plaintext highlighter-rouge">process_slots(previous_state, slot)</code>.</p>
+
+<h4 id="preparing-for-a-beaconblock">Preparing for a <code class="language-plaintext highlighter-rouge">BeaconBlock</code></h4>
+
+<p>To construct a <code class="language-plaintext highlighter-rouge">BeaconBlockBody</code>, a <code class="language-plaintext highlighter-rouge">block</code> (<code class="language-plaintext highlighter-rouge">BeaconBlock</code>) is defined with the necessary context for a block proposal:</p>
+
+<h5 id="slot">Slot</h5>
+
+<p>Set <code class="language-plaintext highlighter-rouge">block.slot = slot</code> where <code class="language-plaintext highlighter-rouge">slot</code> is the current slot at which the validator has been selected to propose. The <code class="language-plaintext highlighter-rouge">parent</code> selected must satisfy that <code class="language-plaintext highlighter-rouge">parent.slot &lt; block.slot</code>.</p>
+
+<p><em>Note</em>: There might be “skipped” slots between the <code class="language-plaintext highlighter-rouge">parent</code> and <code class="language-plaintext highlighter-rouge">block</code>. These skipped slots are processed in the state transition function without per-block processing.</p>
+
+<h5 id="proposer-index">Proposer index</h5>
+
+<p>Set <code class="language-plaintext highlighter-rouge">block.proposer_index = validator_index</code> where <code class="language-plaintext highlighter-rouge">validator_index</code> is the validator chosen to propose at this slot. The private key mapping to <code class="language-plaintext highlighter-rouge">state.validators[validator_index].pubkey</code> is used to sign the block.</p>
+
+<h5 id="parent-root">Parent root</h5>
+
+<p>Set <code class="language-plaintext highlighter-rouge">block.parent_root = hash_tree_root(parent)</code>.</p>
+
+<h4 id="constructing-the-beaconblockbody">Constructing the <code class="language-plaintext highlighter-rouge">BeaconBlockBody</code></h4>
+
+<h5 id="randao-reveal">Randao reveal</h5>
+
+<p>Set <code class="language-plaintext highlighter-rouge">block.body.randao_reveal = epoch_signature</code> where <code class="language-plaintext highlighter-rouge">epoch_signature</code> is obtained from:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_epoch_signature</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">block</span><span class="p">:</span> <span class="n">BeaconBlock</span><span class="p">,</span> <span class="n">privkey</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BLSSignature</span><span class="p">:</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">DOMAIN_RANDAO</span><span class="p">,</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">block</span><span class="p">.</span><span class="n">slot</span><span class="p">))</span>
+    <span class="n">signing_root</span> <span class="o">=</span> <span class="n">compute_signing_root</span><span class="p">(</span><span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">block</span><span class="p">.</span><span class="n">slot</span><span class="p">),</span> <span class="n">domain</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">bls</span><span class="p">.</span><span class="n">Sign</span><span class="p">(</span><span class="n">privkey</span><span class="p">,</span> <span class="n">signing_root</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h5 id="eth1-data">Eth1 Data</h5>
+
+<p>The <code class="language-plaintext highlighter-rouge">block.body.eth1_data</code> field is for block proposers to vote on recent Eth1 data.
+This recent data contains an Eth1 block hash as well as the associated deposit root
+(as calculated by the <code class="language-plaintext highlighter-rouge">get_deposit_root()</code> method of the deposit contract) and
+deposit count after execution of the corresponding Eth1 block.
+If over half of the block proposers in the current Eth1 voting period vote for the same
+<code class="language-plaintext highlighter-rouge">eth1_data</code> then <code class="language-plaintext highlighter-rouge">state.eth1_data</code> updates immediately allowing new deposits to be processed.
+Each deposit in <code class="language-plaintext highlighter-rouge">block.body.deposits</code> must verify against <code class="language-plaintext highlighter-rouge">state.eth1_data.eth1_deposit_root</code>.</p>
+
+<h6 id="eth1block"><code class="language-plaintext highlighter-rouge">Eth1Block</code></h6>
+
+<p>Let <code class="language-plaintext highlighter-rouge">Eth1Block</code> be an abstract object representing Eth1 blocks with the <code class="language-plaintext highlighter-rouge">timestamp</code> and depost contract data available.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">Eth1Block</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">timestamp</span><span class="p">:</span> <span class="n">uint64</span>
+    <span class="n">deposit_root</span><span class="p">:</span> <span class="n">Root</span>
+    <span class="n">deposit_count</span><span class="p">:</span> <span class="n">uint64</span>
+    <span class="c1"># All other eth1 block fields
+</span></code></pre></div></div>
+
+<h6 id="get_eth1_data"><code class="language-plaintext highlighter-rouge">get_eth1_data</code></h6>
+
+<p>Let <code class="language-plaintext highlighter-rouge">get_eth1_data(block: Eth1Block) -&gt; Eth1Data</code> be the function that returns the Eth1 data for a given Eth1 block.</p>
+
+<p>An honest block proposer sets <code class="language-plaintext highlighter-rouge">block.body.eth1_data = get_eth1_vote(state, eth1_chain)</code> where:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">compute_time_at_slot</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">uint64</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">uint64</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">genesis_time</span> <span class="o">+</span> <span class="n">slot</span> <span class="o">*</span> <span class="n">SECONDS_PER_SLOT</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">voting_period_start_time</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">uint64</span><span class="p">:</span>
+    <span class="n">eth1_voting_period_start_slot</span> <span class="o">=</span> <span class="n">Slot</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">slot</span> <span class="o">-</span> <span class="n">state</span><span class="p">.</span><span class="n">slot</span> <span class="o">%</span> <span class="p">(</span><span class="n">EPOCHS_PER_ETH1_VOTING_PERIOD</span> <span class="o">*</span> <span class="n">SLOTS_PER_EPOCH</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">compute_time_at_slot</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">eth1_voting_period_start_slot</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">is_candidate_block</span><span class="p">(</span><span class="n">block</span><span class="p">:</span> <span class="n">Eth1Block</span><span class="p">,</span> <span class="n">period_start</span><span class="p">:</span> <span class="n">uint64</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="n">block</span><span class="p">.</span><span class="n">timestamp</span> <span class="o">+</span> <span class="n">SECONDS_PER_ETH1_BLOCK</span> <span class="o">*</span> <span class="n">ETH1_FOLLOW_DISTANCE</span> <span class="o">&lt;=</span> <span class="n">period_start</span>
+        <span class="ow">and</span> <span class="n">block</span><span class="p">.</span><span class="n">timestamp</span> <span class="o">+</span> <span class="n">SECONDS_PER_ETH1_BLOCK</span> <span class="o">*</span> <span class="n">ETH1_FOLLOW_DISTANCE</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">&gt;=</span> <span class="n">period_start</span>
+    <span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_eth1_vote</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">eth1_chain</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Eth1Block</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Eth1Data</span><span class="p">:</span>
+    <span class="n">period_start</span> <span class="o">=</span> <span class="n">voting_period_start_time</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="c1"># `eth1_chain` abstractly represents all blocks in the eth1 chain sorted by ascending block height
+</span>    <span class="n">votes_to_consider</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">get_eth1_data</span><span class="p">(</span><span class="n">block</span><span class="p">)</span> <span class="k">for</span> <span class="n">block</span> <span class="ow">in</span> <span class="n">eth1_chain</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="n">is_candidate_block</span><span class="p">(</span><span class="n">block</span><span class="p">,</span> <span class="n">period_start</span><span class="p">)</span>
+            <span class="c1"># Ensure cannot move back to earlier deposit contract states
+</span>            <span class="ow">and</span> <span class="n">get_eth1_data</span><span class="p">(</span><span class="n">block</span><span class="p">).</span><span class="n">deposit_count</span> <span class="o">&gt;=</span> <span class="n">state</span><span class="p">.</span><span class="n">eth1_data</span><span class="p">.</span><span class="n">deposit_count</span>
+        <span class="p">)</span>
+    <span class="p">]</span>
+
+    <span class="c1"># Valid votes already cast during this period
+</span>    <span class="n">valid_votes</span> <span class="o">=</span> <span class="p">[</span><span class="n">vote</span> <span class="k">for</span> <span class="n">vote</span> <span class="ow">in</span> <span class="n">state</span><span class="p">.</span><span class="n">eth1_data_votes</span> <span class="k">if</span> <span class="n">vote</span> <span class="ow">in</span> <span class="n">votes_to_consider</span><span class="p">]</span>
+
+    <span class="c1"># Default vote on latest eth1 block data in the period range unless eth1 chain is not live
+</span>    <span class="c1"># Non-substantive casting for linter
+</span>    <span class="n">state_eth1_data</span><span class="p">:</span> <span class="n">Eth1Data</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">eth1_data</span>
+    <span class="n">default_vote</span> <span class="o">=</span> <span class="n">votes_to_consider</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">votes_to_consider</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">votes_to_consider</span><span class="p">)</span> <span class="k">else</span> <span class="n">state_eth1_data</span>
+
+    <span class="k">return</span> <span class="nb">max</span><span class="p">(</span>
+        <span class="n">valid_votes</span><span class="p">,</span>
+        <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">v</span><span class="p">:</span> <span class="p">(</span><span class="n">valid_votes</span><span class="p">.</span><span class="n">count</span><span class="p">(</span><span class="n">v</span><span class="p">),</span> <span class="o">-</span><span class="n">valid_votes</span><span class="p">.</span><span class="n">index</span><span class="p">(</span><span class="n">v</span><span class="p">)),</span>  <span class="c1"># Tiebreak by smallest distance
+</span>        <span class="n">default</span><span class="o">=</span><span class="n">default_vote</span>
+    <span class="p">)</span>
+</code></pre></div></div>
+
+<h5 id="proposer-slashings">Proposer slashings</h5>
+
+<p>Up to <code class="language-plaintext highlighter-rouge">MAX_PROPOSER_SLASHINGS</code>, <a href="/eth2specs/specs/phase0/beacon-chain.html#proposerslashing"><code class="language-plaintext highlighter-rouge">ProposerSlashing</code></a> objects can be included in the <code class="language-plaintext highlighter-rouge">block</code>. The proposer slashings must satisfy the verification conditions found in <a href="/eth2specs/specs/phase0/beacon-chain.html#proposer-slashings">proposer slashings processing</a>. The validator receives a small “whistleblower” reward for each proposer slashing found and included.</p>
+
+<h5 id="attester-slashings">Attester slashings</h5>
+
+<p>Up to <code class="language-plaintext highlighter-rouge">MAX_ATTESTER_SLASHINGS</code>, <a href="/eth2specs/specs/phase0/beacon-chain.html#attesterslashing"><code class="language-plaintext highlighter-rouge">AttesterSlashing</code></a> objects can be included in the <code class="language-plaintext highlighter-rouge">block</code>. The attester slashings must satisfy the verification conditions found in <a href="/eth2specs/specs/phase0/beacon-chain.html#attester-slashings">attester slashings processing</a>. The validator receives a small “whistleblower” reward for each attester slashing found and included.</p>
+
+<h5 id="attestations">Attestations</h5>
+
+<p>Up to <code class="language-plaintext highlighter-rouge">MAX_ATTESTATIONS</code>, aggregate attestations can be included in the <code class="language-plaintext highlighter-rouge">block</code>. The attestations added must satisfy the verification conditions found in <a href="/eth2specs/specs/phase0/beacon-chain.html#attestations">attestation processing</a>. To maximize profit, the validator should attempt to gather aggregate attestations that include singular attestations from the largest number of validators whose signatures from the same epoch have not previously been added on chain.</p>
+
+<h5 id="deposits">Deposits</h5>
+
+<p>If there are any unprocessed deposits for the existing <code class="language-plaintext highlighter-rouge">state.eth1_data</code> (i.e. <code class="language-plaintext highlighter-rouge">state.eth1_data.deposit_count &gt; state.eth1_deposit_index</code>), then pending deposits <em>must</em> be added to the block. The expected number of deposits is exactly <code class="language-plaintext highlighter-rouge">min(MAX_DEPOSITS, eth1_data.deposit_count - state.eth1_deposit_index)</code>.  These <a href="/eth2specs/specs/phase0/beacon-chain.html#deposit"><code class="language-plaintext highlighter-rouge">deposits</code></a> are constructed from the <code class="language-plaintext highlighter-rouge">Deposit</code> logs from the <a href="/eth2specs/specs/phase0/deposit-contract.html">Eth1 deposit contract</a> and must be processed in sequential order. The deposits included in the <code class="language-plaintext highlighter-rouge">block</code> must satisfy the verification conditions found in <a href="/eth2specs/specs/phase0/beacon-chain.html#deposits">deposits processing</a>.</p>
+
+<p>The <code class="language-plaintext highlighter-rouge">proof</code> for each deposit must be constructed against the deposit root contained in <code class="language-plaintext highlighter-rouge">state.eth1_data</code> rather than the deposit root at the time the deposit was initially logged from the 1.0 chain. This entails storing a full deposit merkle tree locally and computing updated proofs against the <code class="language-plaintext highlighter-rouge">eth1_data.deposit_root</code> as needed. See <a href="https://github.com/ethereum/research/blob/master/spec_pythonizer/utils/merkle_minimal.py"><code class="language-plaintext highlighter-rouge">minimal_merkle.py</code></a> for a sample implementation.</p>
+
+<h5 id="voluntary-exits">Voluntary exits</h5>
+
+<p>Up to <code class="language-plaintext highlighter-rouge">MAX_VOLUNTARY_EXITS</code>, <a href="/eth2specs/specs/phase0/beacon-chain.html#voluntaryexit"><code class="language-plaintext highlighter-rouge">VoluntaryExit</code></a> objects can be included in the <code class="language-plaintext highlighter-rouge">block</code>. The exits must satisfy the verification conditions found in <a href="/eth2specs/specs/phase0/beacon-chain.html#voluntary-exits">exits processing</a>.</p>
+
+<p><em>Note</em>: If a slashing for a validator is included in the same block as a
+voluntary exit, the voluntary exit will fail and cause the block to be invalid
+due to the slashing being processed first. Implementers must take heed of this
+operation interaction when packing blocks.</p>
+
+<h4 id="packaging-into-a-signedbeaconblock">Packaging into a <code class="language-plaintext highlighter-rouge">SignedBeaconBlock</code></h4>
+
+<h5 id="state-root">State root</h5>
+
+<p>Set <code class="language-plaintext highlighter-rouge">block.state_root = hash_tree_root(state)</code> of the resulting <code class="language-plaintext highlighter-rouge">state</code> of the <code class="language-plaintext highlighter-rouge">parent -&gt; block</code> state transition.</p>
+
+<p><em>Note</em>: To calculate <code class="language-plaintext highlighter-rouge">state_root</code>, the validator should first run the state transition function on an unsigned <code class="language-plaintext highlighter-rouge">block</code> containing a stub for the <code class="language-plaintext highlighter-rouge">state_root</code>.
+It is useful to be able to run a state transition function (working on a copy of the state) that does <em>not</em> validate signatures or state root for this purpose:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">compute_new_state_root</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">block</span><span class="p">:</span> <span class="n">BeaconBlock</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Root</span><span class="p">:</span>
+    <span class="n">temp_state</span><span class="p">:</span> <span class="n">BeaconState</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">signed_block</span> <span class="o">=</span> <span class="n">SignedBeaconBlock</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="n">block</span><span class="p">)</span>
+    <span class="n">state_transition</span><span class="p">(</span><span class="n">temp_state</span><span class="p">,</span> <span class="n">signed_block</span><span class="p">,</span> <span class="n">validate_result</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">hash_tree_root</span><span class="p">(</span><span class="n">temp_state</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h5 id="signature">Signature</h5>
+
+<p><code class="language-plaintext highlighter-rouge">signed_block = SignedBeaconBlock(message=block, signature=block_signature)</code>, where <code class="language-plaintext highlighter-rouge">block_signature</code> is obtained from:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_block_signature</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">block</span><span class="p">:</span> <span class="n">BeaconBlock</span><span class="p">,</span> <span class="n">privkey</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BLSSignature</span><span class="p">:</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">DOMAIN_BEACON_PROPOSER</span><span class="p">,</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">block</span><span class="p">.</span><span class="n">slot</span><span class="p">))</span>
+    <span class="n">signing_root</span> <span class="o">=</span> <span class="n">compute_signing_root</span><span class="p">(</span><span class="n">block</span><span class="p">,</span> <span class="n">domain</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">bls</span><span class="p">.</span><span class="n">Sign</span><span class="p">(</span><span class="n">privkey</span><span class="p">,</span> <span class="n">signing_root</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="attesting">Attesting</h3>
+
+<p>A validator is expected to create, sign, and broadcast an attestation during each epoch. The <code class="language-plaintext highlighter-rouge">committee</code>, assigned <code class="language-plaintext highlighter-rouge">index</code>, and assigned <code class="language-plaintext highlighter-rouge">slot</code> for which the validator performs this role during an epoch are defined by <code class="language-plaintext highlighter-rouge">get_committee_assignment(state, epoch, validator_index)</code>.</p>
+
+<p>A validator should create and broadcast the <code class="language-plaintext highlighter-rouge">attestation</code> to the associated attestation subnet when either (a) the validator has received a valid block from the expected block proposer for the assigned <code class="language-plaintext highlighter-rouge">slot</code> or (b) one-third of the <code class="language-plaintext highlighter-rouge">slot</code> has transpired (<code class="language-plaintext highlighter-rouge">SECONDS_PER_SLOT / 3</code> seconds after the start of <code class="language-plaintext highlighter-rouge">slot</code>) – whichever comes <em>first</em>.</p>
+
+<p><em>Note</em>: Although attestations during <code class="language-plaintext highlighter-rouge">GENESIS_EPOCH</code> do not count toward FFG finality, these initial attestations do give weight to the fork choice, are rewarded, and should be made.</p>
+
+<h4 id="attestation-data">Attestation data</h4>
+
+<p>First, the validator should construct <code class="language-plaintext highlighter-rouge">attestation_data</code>, an <a href="/eth2specs/specs/phase0/beacon-chain.html#attestationdata"><code class="language-plaintext highlighter-rouge">AttestationData</code></a> object based upon the state at the assigned slot.</p>
+
+<ul>
+  <li>Let <code class="language-plaintext highlighter-rouge">head_block</code> be the result of running the fork choice during the assigned slot.</li>
+  <li>Let <code class="language-plaintext highlighter-rouge">head_state</code> be the state of <code class="language-plaintext highlighter-rouge">head_block</code> processed through any empty slots up to the assigned slot using <code class="language-plaintext highlighter-rouge">process_slots(state, slot)</code>.</li>
+</ul>
+
+<h5 id="general">General</h5>
+
+<ul>
+  <li>Set <code class="language-plaintext highlighter-rouge">attestation_data.slot = slot</code> where <code class="language-plaintext highlighter-rouge">slot</code> is the assigned slot.</li>
+  <li>Set <code class="language-plaintext highlighter-rouge">attestation_data.index = index</code> where <code class="language-plaintext highlighter-rouge">index</code> is the index associated with the validator’s committee.</li>
+</ul>
+
+<h5 id="lmd-ghost-vote">LMD GHOST vote</h5>
+
+<p>Set <code class="language-plaintext highlighter-rouge">attestation_data.beacon_block_root = hash_tree_root(head_block)</code>.</p>
+
+<h5 id="ffg-vote">FFG vote</h5>
+
+<ul>
+  <li>Set <code class="language-plaintext highlighter-rouge">attestation_data.source = head_state.current_justified_checkpoint</code>.</li>
+  <li>Set <code class="language-plaintext highlighter-rouge">attestation_data.target = Checkpoint(epoch=get_current_epoch(head_state), root=epoch_boundary_block_root)</code> where <code class="language-plaintext highlighter-rouge">epoch_boundary_block_root</code> is the root of block at the most recent epoch boundary.</li>
+</ul>
+
+<p><em>Note</em>: <code class="language-plaintext highlighter-rouge">epoch_boundary_block_root</code> can be looked up in the state using:</p>
+
+<ul>
+  <li>Let <code class="language-plaintext highlighter-rouge">start_slot = compute_start_slot_at_epoch(get_current_epoch(head_state))</code>.</li>
+  <li>Let <code class="language-plaintext highlighter-rouge">epoch_boundary_block_root = hash_tree_root(head_block) if start_slot == head_state.slot else get_block_root(state, get_current_epoch(head_state))</code>.</li>
+</ul>
+
+<h4 id="construct-attestation">Construct attestation</h4>
+
+<p>Next, the validator creates <code class="language-plaintext highlighter-rouge">attestation</code>, an <a href="/eth2specs/specs/phase0/beacon-chain.html#attestation"><code class="language-plaintext highlighter-rouge">Attestation</code></a> object.</p>
+
+<h5 id="data">Data</h5>
+
+<p>Set <code class="language-plaintext highlighter-rouge">attestation.data = attestation_data</code> where <code class="language-plaintext highlighter-rouge">attestation_data</code> is the <code class="language-plaintext highlighter-rouge">AttestationData</code> object defined in the previous section, <a href="#attestation-data">attestation data</a>.</p>
+
+<h5 id="aggregation-bits">Aggregation bits</h5>
+
+<ul>
+  <li>Let <code class="language-plaintext highlighter-rouge">attestation.aggregation_bits</code> be a <code class="language-plaintext highlighter-rouge">Bitlist[MAX_VALIDATORS_PER_COMMITTEE]</code> of length <code class="language-plaintext highlighter-rouge">len(committee)</code>, where the bit of the index of the validator in the <code class="language-plaintext highlighter-rouge">committee</code> is set to <code class="language-plaintext highlighter-rouge">0b1</code>.</li>
+</ul>
+
+<p><em>Note</em>: Calling <code class="language-plaintext highlighter-rouge">get_attesting_indices(state, attestation.data, attestation.aggregation_bits)</code> should return a list of length equal to 1, containing <code class="language-plaintext highlighter-rouge">validator_index</code>.</p>
+
+<h5 id="aggregate-signature">Aggregate signature</h5>
+
+<p>Set <code class="language-plaintext highlighter-rouge">attestation.signature = attestation_signature</code> where <code class="language-plaintext highlighter-rouge">attestation_signature</code> is obtained from:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_attestation_signature</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">attestation_data</span><span class="p">:</span> <span class="n">AttestationData</span><span class="p">,</span> <span class="n">privkey</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BLSSignature</span><span class="p">:</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">DOMAIN_BEACON_ATTESTER</span><span class="p">,</span> <span class="n">attestation_data</span><span class="p">.</span><span class="n">target</span><span class="p">.</span><span class="n">epoch</span><span class="p">)</span>
+    <span class="n">signing_root</span> <span class="o">=</span> <span class="n">compute_signing_root</span><span class="p">(</span><span class="n">attestation_data</span><span class="p">,</span> <span class="n">domain</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">bls</span><span class="p">.</span><span class="n">Sign</span><span class="p">(</span><span class="n">privkey</span><span class="p">,</span> <span class="n">signing_root</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="broadcast-attestation">Broadcast attestation</h4>
+
+<p>Finally, the validator broadcasts <code class="language-plaintext highlighter-rouge">attestation</code> to the associated attestation subnet, the <code class="language-plaintext highlighter-rouge">beacon_attestation_{subnet_id}</code> pubsub topic.</p>
+
+<p>The <code class="language-plaintext highlighter-rouge">subnet_id</code> for the <code class="language-plaintext highlighter-rouge">attestation</code> is calculated with:</p>
+<ul>
+  <li>Let <code class="language-plaintext highlighter-rouge">committees_per_slot = get_committee_count_per_slot(state, attestation.data.target.epoch)</code>.</li>
+  <li>Let <code class="language-plaintext highlighter-rouge">subnet_id = compute_subnet_for_attestation(committees_per_slot, attestation.data.slot, attestation.data.committee_index)</code>.</li>
+</ul>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">compute_subnet_for_attestation</span><span class="p">(</span><span class="n">committees_per_slot</span><span class="p">:</span> <span class="n">uint64</span><span class="p">,</span> <span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span><span class="p">,</span> <span class="n">committee_index</span><span class="p">:</span> <span class="n">CommitteeIndex</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">uint64</span><span class="p">:</span>
+    <span class="s">"""
+    Compute the correct subnet for an attestation for Phase 0.
+    Note, this mimics expected Phase 1 behavior where attestations will be mapped to their shard subnet.
+    """</span>
+    <span class="n">slots_since_epoch_start</span> <span class="o">=</span> <span class="n">uint64</span><span class="p">(</span><span class="n">slot</span> <span class="o">%</span> <span class="n">SLOTS_PER_EPOCH</span><span class="p">)</span>
+    <span class="n">committees_since_epoch_start</span> <span class="o">=</span> <span class="n">committees_per_slot</span> <span class="o">*</span> <span class="n">slots_since_epoch_start</span>
+
+    <span class="k">return</span> <span class="n">uint64</span><span class="p">((</span><span class="n">committees_since_epoch_start</span> <span class="o">+</span> <span class="n">committee_index</span><span class="p">)</span> <span class="o">%</span> <span class="n">ATTESTATION_SUBNET_COUNT</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="attestation-aggregation">Attestation aggregation</h3>
+
+<p>Some validators are selected to locally aggregate attestations with a similar <code class="language-plaintext highlighter-rouge">attestation_data</code> to their constructed <code class="language-plaintext highlighter-rouge">attestation</code> for the assigned <code class="language-plaintext highlighter-rouge">slot</code>.</p>
+
+<h4 id="aggregation-selection">Aggregation selection</h4>
+
+<p>A validator is selected to aggregate based upon the return value of <code class="language-plaintext highlighter-rouge">is_aggregator()</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_slot_signature</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span><span class="p">,</span> <span class="n">privkey</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BLSSignature</span><span class="p">:</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">DOMAIN_SELECTION_PROOF</span><span class="p">,</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">slot</span><span class="p">))</span>
+    <span class="n">signing_root</span> <span class="o">=</span> <span class="n">compute_signing_root</span><span class="p">(</span><span class="n">slot</span><span class="p">,</span> <span class="n">domain</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">bls</span><span class="p">.</span><span class="n">Sign</span><span class="p">(</span><span class="n">privkey</span><span class="p">,</span> <span class="n">signing_root</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">is_aggregator</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="n">CommitteeIndex</span><span class="p">,</span> <span class="n">slot_signature</span><span class="p">:</span> <span class="n">BLSSignature</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="n">committee</span> <span class="o">=</span> <span class="n">get_beacon_committee</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">slot</span><span class="p">,</span> <span class="n">index</span><span class="p">)</span>
+    <span class="n">modulo</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">committee</span><span class="p">)</span> <span class="o">//</span> <span class="n">TARGET_AGGREGATORS_PER_COMMITTEE</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">bytes_to_uint64</span><span class="p">(</span><span class="nb">hash</span><span class="p">(</span><span class="n">slot_signature</span><span class="p">)[</span><span class="mi">0</span><span class="p">:</span><span class="mi">8</span><span class="p">])</span> <span class="o">%</span> <span class="n">modulo</span> <span class="o">==</span> <span class="mi">0</span>
+</code></pre></div></div>
+
+<h4 id="construct-aggregate">Construct aggregate</h4>
+
+<p>If the validator is selected to aggregate (<code class="language-plaintext highlighter-rouge">is_aggregator()</code>), they construct an aggregate attestation via the following.</p>
+
+<p>Collect <code class="language-plaintext highlighter-rouge">attestations</code> seen via gossip during the <code class="language-plaintext highlighter-rouge">slot</code> that have an equivalent <code class="language-plaintext highlighter-rouge">attestation_data</code> to that constructed by the validator. If <code class="language-plaintext highlighter-rouge">len(attestations) &gt; 0</code>, create an <code class="language-plaintext highlighter-rouge">aggregate_attestation: Attestation</code> with the following fields.</p>
+
+<h5 id="data-1">Data</h5>
+
+<p>Set <code class="language-plaintext highlighter-rouge">aggregate_attestation.data = attestation_data</code> where <code class="language-plaintext highlighter-rouge">attestation_data</code> is the <code class="language-plaintext highlighter-rouge">AttestationData</code> object that is the same for each individual attestation being aggregated.</p>
+
+<h5 id="aggregation-bits-1">Aggregation bits</h5>
+
+<p>Let <code class="language-plaintext highlighter-rouge">aggregate_attestation.aggregation_bits</code> be a <code class="language-plaintext highlighter-rouge">Bitlist[MAX_VALIDATORS_PER_COMMITTEE]</code> of length <code class="language-plaintext highlighter-rouge">len(committee)</code>, where each bit set from each individual attestation is set to <code class="language-plaintext highlighter-rouge">0b1</code>.</p>
+
+<h5 id="aggregate-signature-1">Aggregate signature</h5>
+
+<p>Set <code class="language-plaintext highlighter-rouge">aggregate_attestation.signature = aggregate_signature</code> where <code class="language-plaintext highlighter-rouge">aggregate_signature</code> is obtained from:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_aggregate_signature</span><span class="p">(</span><span class="n">attestations</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Attestation</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">BLSSignature</span><span class="p">:</span>
+    <span class="n">signatures</span> <span class="o">=</span> <span class="p">[</span><span class="n">attestation</span><span class="p">.</span><span class="n">signature</span> <span class="k">for</span> <span class="n">attestation</span> <span class="ow">in</span> <span class="n">attestations</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">bls</span><span class="p">.</span><span class="n">Aggregate</span><span class="p">(</span><span class="n">signatures</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="broadcast-aggregate">Broadcast aggregate</h4>
+
+<p>If the validator is selected to aggregate (<code class="language-plaintext highlighter-rouge">is_aggregator</code>), then they broadcast their best aggregate as a <code class="language-plaintext highlighter-rouge">SignedAggregateAndProof</code> to the global aggregate channel (<code class="language-plaintext highlighter-rouge">beacon_aggregate_and_proof</code>) two-thirds of the way through the <code class="language-plaintext highlighter-rouge">slot</code>-that is, <code class="language-plaintext highlighter-rouge">SECONDS_PER_SLOT * 2 / 3</code> seconds after the start of <code class="language-plaintext highlighter-rouge">slot</code>.</p>
+
+<p>Selection proofs are provided in <code class="language-plaintext highlighter-rouge">AggregateAndProof</code> to prove to the gossip channel that the validator has been selected as an aggregator.</p>
+
+<p><code class="language-plaintext highlighter-rouge">AggregateAndProof</code> messages are signed by the aggregator and broadcast inside of <code class="language-plaintext highlighter-rouge">SignedAggregateAndProof</code> objects to prevent a class of DoS attacks and message forgeries.</p>
+
+<p>First, <code class="language-plaintext highlighter-rouge">aggregate_and_proof = get_aggregate_and_proof(state, validator_index, aggregate_attestation, privkey)</code> is constructed.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_aggregate_and_proof</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+                            <span class="n">aggregator_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span><span class="p">,</span>
+                            <span class="n">aggregate</span><span class="p">:</span> <span class="n">Attestation</span><span class="p">,</span>
+                            <span class="n">privkey</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AggregateAndProof</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">AggregateAndProof</span><span class="p">(</span>
+        <span class="n">aggregator_index</span><span class="o">=</span><span class="n">aggregator_index</span><span class="p">,</span>
+        <span class="n">aggregate</span><span class="o">=</span><span class="n">aggregate</span><span class="p">,</span>
+        <span class="n">selection_proof</span><span class="o">=</span><span class="n">get_slot_signature</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">aggregate</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">slot</span><span class="p">,</span> <span class="n">privkey</span><span class="p">),</span>
+    <span class="p">)</span>
+</code></pre></div></div>
+
+<p>Then <code class="language-plaintext highlighter-rouge">signed_aggregate_and_proof = SignedAggregateAndProof(message=aggregate_and_proof, signature=signature)</code> is constructed and broadast. Where <code class="language-plaintext highlighter-rouge">signature</code> is obtained from:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_aggregate_and_proof_signature</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+                                      <span class="n">aggregate_and_proof</span><span class="p">:</span> <span class="n">AggregateAndProof</span><span class="p">,</span>
+                                      <span class="n">privkey</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BLSSignature</span><span class="p">:</span>
+    <span class="n">aggregate</span> <span class="o">=</span> <span class="n">aggregate_and_proof</span><span class="p">.</span><span class="n">aggregate</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">DOMAIN_AGGREGATE_AND_PROOF</span><span class="p">,</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">aggregate</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">slot</span><span class="p">))</span>
+    <span class="n">signing_root</span> <span class="o">=</span> <span class="n">compute_signing_root</span><span class="p">(</span><span class="n">aggregate_and_proof</span><span class="p">,</span> <span class="n">domain</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">bls</span><span class="p">.</span><span class="n">Sign</span><span class="p">(</span><span class="n">privkey</span><span class="p">,</span> <span class="n">signing_root</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h5 id="aggregateandproof"><code class="language-plaintext highlighter-rouge">AggregateAndProof</code></h5>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">AggregateAndProof</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">aggregator_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span>
+    <span class="n">aggregate</span><span class="p">:</span> <span class="n">Attestation</span>
+    <span class="n">selection_proof</span><span class="p">:</span> <span class="n">BLSSignature</span>
+</code></pre></div></div>
+
+<h5 id="signedaggregateandproof"><code class="language-plaintext highlighter-rouge">SignedAggregateAndProof</code></h5>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">SignedAggregateAndProof</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">message</span><span class="p">:</span> <span class="n">AggregateAndProof</span>
+    <span class="n">signature</span><span class="p">:</span> <span class="n">BLSSignature</span>
+</code></pre></div></div>
+
+<h2 id="phase-0-attestation-subnet-stability">Phase 0 attestation subnet stability</h2>
+
+<p>Because Phase 0 does not have shards and thus does not have Shard Committees, there is no stable backbone to the attestation subnets (<code class="language-plaintext highlighter-rouge">beacon_attestation_{subnet_id}</code>). To provide this stability, each validator must:</p>
+
+<ul>
+  <li>Randomly select and remain subscribed to <code class="language-plaintext highlighter-rouge">RANDOM_SUBNETS_PER_VALIDATOR</code> attestation subnets</li>
+  <li>Maintain advertisement of the randomly selected subnets in their node’s ENR <code class="language-plaintext highlighter-rouge">attnets</code> entry by setting the randomly selected <code class="language-plaintext highlighter-rouge">subnet_id</code> bits to <code class="language-plaintext highlighter-rouge">True</code> (e.g. <code class="language-plaintext highlighter-rouge">ENR["attnets"][subnet_id] = True</code>) for all persistent attestation subnets</li>
+  <li>Set the lifetime of each random subscription to a random number of epochs between <code class="language-plaintext highlighter-rouge">EPOCHS_PER_RANDOM_SUBNET_SUBSCRIPTION</code> and <code class="language-plaintext highlighter-rouge">2 * EPOCHS_PER_RANDOM_SUBNET_SUBSCRIPTION]</code>. At the end of life for a subscription, select a new random subnet, update subnet subscriptions, and publish an updated ENR</li>
+</ul>
+
+<p><em>Note</em>: Short lived beacon committee assignments should not be added in into the ENR <code class="language-plaintext highlighter-rouge">attnets</code> entry.</p>
+
+<p><em>Note</em>: When preparing for a hard fork, a validator must select and subscribe to random subnets of the future fork versioning at least <code class="language-plaintext highlighter-rouge">EPOCHS_PER_RANDOM_SUBNET_SUBSCRIPTION</code> epochs in advance of the fork. These new subnets for the fork are maintained in addition to those for the current fork until the fork occurs. After the fork occurs, let the subnets from the previous fork reach the end of life with no replacements.</p>
+
+<h2 id="how-to-avoid-slashing">How to avoid slashing</h2>
+
+<p>“Slashing” is the burning of some amount of validator funds and immediate ejection from the active validator set. In Phase 0, there are two ways in which funds can be slashed: <a href="#proposer-slashing">proposer slashing</a> and <a href="#attester-slashing">attester slashing</a>. Although being slashed has serious repercussions, it is simple enough to avoid being slashed all together by remaining <em>consistent</em> with respect to the messages a validator has previously signed.</p>
+
+<p><em>Note</em>: Signed data must be within a sequential <code class="language-plaintext highlighter-rouge">Fork</code> context to conflict. Messages cannot be slashed across diverging forks. If the previous fork version is 1 and the chain splits into fork 2 and 102, messages from 1 can slashable against messages in forks 1, 2, and 102. Messages in 2 cannot be slashable against messages in 102, and vice versa.</p>
+
+<h3 id="proposer-slashing">Proposer slashing</h3>
+
+<p>To avoid “proposer slashings”, a validator must not sign two conflicting <a href="/eth2specs/specs/phase0/beacon-chain.html#beaconblock"><code class="language-plaintext highlighter-rouge">BeaconBlock</code></a> where conflicting is defined as two distinct blocks within the same slot.</p>
+
+<p><em>In Phase 0, as long as the validator does not sign two different beacon blocks for the same slot, the validator is safe against proposer slashings.</em></p>
+
+<p>Specifically, when signing a <code class="language-plaintext highlighter-rouge">BeaconBlock</code>, a validator should perform the following steps in the following order:</p>
+
+<ol>
+  <li>Save a record to hard disk that a beacon block has been signed for the <code class="language-plaintext highlighter-rouge">slot=block.slot</code>.</li>
+  <li>Generate and broadcast the block.</li>
+</ol>
+
+<p>If the software crashes at some point within this routine, then when the validator comes back online, the hard disk has the record of the <em>potentially</em> signed/broadcast block and can effectively avoid slashing.</p>
+
+<h3 id="attester-slashing">Attester slashing</h3>
+
+<p>To avoid “attester slashings”, a validator must not sign two conflicting <a href="/eth2specs/specs/phase0/beacon-chain.html#attestationdata"><code class="language-plaintext highlighter-rouge">AttestationData</code></a> objects, i.e. two attestations that satisfy <a href="/eth2specs/specs/phase0/beacon-chain.html#is_slashable_attestation_data"><code class="language-plaintext highlighter-rouge">is_slashable_attestation_data</code></a>.</p>
+
+<p>Specifically, when signing an <code class="language-plaintext highlighter-rouge">Attestation</code>, a validator should perform the following steps in the following order:</p>
+
+<ol>
+  <li>Save a record to hard disk that an attestation has been signed for source (i.e. <code class="language-plaintext highlighter-rouge">attestation_data.source.epoch</code>) and target (i.e. <code class="language-plaintext highlighter-rouge">attestation_data.target.epoch</code>).</li>
+  <li>Generate and broadcast attestation.</li>
+</ol>
+
+<p>If the software crashes at some point within this routine, then when the validator comes back online, the hard disk has the record of the <em>potentially</em> signed/broadcast attestation and can effectively avoid slashing.</p>
+
+<h2 id="protection-best-practices">Protection best practices</h2>
+
+<p>A validator client should be considered standalone and should consider the beacon node as untrusted. This means that the validator client should protect:</p>
+
+<p>1) Private keys – private keys should be protected from being exported accidentally or by an attacker.
+2) Slashing – before a validator client signs a message it should validate the data, check it against a local slashing database (do not sign a slashable attestation or block) and update its internal slashing database with the newly signed object.
+3) Recovered validator – Recovering a validator from a private key will result in an empty local slashing db. Best practice is to import (from a trusted source) that validator’s attestation history. See <a href="https://github.com/ethereum/EIPs/pull/3076/files">EIP 3076</a> for a standard slashing interchange format.
+4) Far future signing requests – A validator client can be requested to sign a far into the future attestation, resulting in a valid non-slashable request. If the validator client signs this message, it will result in it blocking itself from attesting any other attestation until the beacon-chain reaches that far into the future epoch. This will result in an inactivity leak and potential ejection due to low balance. 
+A validator client should prevent itself from signing such requests by: a) keeping a local time clock if possible and following best practices to stop time server attacks and b) refusing to sign, by default, any message that has a large (&gt;6h) gap from the current slashing protection database indicated a time “jump” or a long offline event. The administrator can manually override this protection to restart the validator after a genuine long offline event.</p>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

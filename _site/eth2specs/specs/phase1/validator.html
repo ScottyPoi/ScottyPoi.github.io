@@ -1,0 +1,647 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="ethereum-20-phase-1--honest-validator">Ethereum 2.0 Phase 1 – Honest Validator</h1>
+
+<p><strong>Notice</strong>: This document is a work-in-progress for researchers and implementers. This is an accompanying document to <a href="./">Ethereum 2.0 Phase 1</a>, which describes the expected actions of a “validator” participating in the Ethereum 2.0 Phase 1 protocol.</p>
+
+<h2 id="table-of-contents">Table of contents</h2>
+
+<!-- TOC -->
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+<ul>
+  <li><a href="#introduction">Introduction</a></li>
+  <li><a href="#prerequisites">Prerequisites</a></li>
+  <li><a href="#constants">Constants</a>
+    <ul>
+      <li><a href="#misc">Misc</a></li>
+    </ul>
+  </li>
+  <li><a href="#becoming-a-validator">Becoming a validator</a></li>
+  <li><a href="#beacon-chain-validator-assignments">Beacon chain validator assignments</a>
+    <ul>
+      <li><a href="#lookahead">Lookahead</a></li>
+    </ul>
+  </li>
+  <li><a href="#beacon-chain-responsibilities">Beacon chain responsibilities</a>
+    <ul>
+      <li><a href="#block-proposal">Block proposal</a>
+        <ul>
+          <li><a href="#preparing-for-a-beaconblock">Preparing for a <code class="language-plaintext highlighter-rouge">BeaconBlock</code></a></li>
+          <li><a href="#constructing-the-beaconblockbody">Constructing the <code class="language-plaintext highlighter-rouge">BeaconBlockBody</code></a>
+            <ul>
+              <li><a href="#custody-slashings">Custody slashings</a></li>
+              <li><a href="#custody-key-reveals">Custody key reveals</a></li>
+              <li><a href="#early-derived-secret-reveals">Early derived secret reveals</a></li>
+              <li><a href="#shard-transitions">Shard transitions</a></li>
+              <li><a href="#light-client-fields">Light client fields</a></li>
+            </ul>
+          </li>
+          <li><a href="#packaging-into-a-signedbeaconblock">Packaging into a <code class="language-plaintext highlighter-rouge">SignedBeaconBlock</code></a></li>
+        </ul>
+      </li>
+      <li><a href="#attesting">Attesting</a>
+        <ul>
+          <li><a href="#fullattestationdata"><code class="language-plaintext highlighter-rouge">FullAttestationData</code></a></li>
+          <li><a href="#fullattestation"><code class="language-plaintext highlighter-rouge">FullAttestation</code></a></li>
+          <li><a href="#timing">Timing</a></li>
+          <li><a href="#attestation-data">Attestation data</a>
+            <ul>
+              <li><a href="#shard-head-root">Shard head root</a></li>
+              <li><a href="#shard-transition">Shard transition</a></li>
+            </ul>
+          </li>
+          <li><a href="#construct-attestation">Construct attestation</a></li>
+        </ul>
+      </li>
+      <li><a href="#attestation-aggregation">Attestation Aggregation</a>
+        <ul>
+          <li><a href="#broadcast-aggregate">Broadcast aggregate</a>
+            <ul>
+              <li><a href="#aggregateandproof"><code class="language-plaintext highlighter-rouge">AggregateAndProof</code></a></li>
+              <li><a href="#signedaggregateandproof"><code class="language-plaintext highlighter-rouge">SignedAggregateAndProof</code></a></li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+      <li><a href="#light-client-committee">Light client committee</a>
+        <ul>
+          <li><a href="#preparation">Preparation</a></li>
+          <li><a href="#light-client-vote">Light client vote</a>
+            <ul>
+              <li><a href="#light-client-vote-data">Light client vote data</a>
+                <ul>
+                  <li><a href="#lightclientvotedata"><code class="language-plaintext highlighter-rouge">LightClientVoteData</code></a></li>
+                </ul>
+              </li>
+              <li><a href="#construct-vote">Construct vote</a>
+                <ul>
+                  <li><a href="#lightclientvote"><code class="language-plaintext highlighter-rouge">LightClientVote</code></a></li>
+                </ul>
+              </li>
+              <li><a href="#broadcast">Broadcast</a></li>
+            </ul>
+          </li>
+          <li><a href="#light-client-vote-aggregation">Light client vote aggregation</a></li>
+          <li><a href="#aggregation-selection">Aggregation selection</a></li>
+          <li><a href="#construct-aggregate">Construct aggregate</a></li>
+          <li><a href="#broadcast-aggregate-1">Broadcast aggregate</a>
+            <ul>
+              <li><a href="#lightaggregateandproof"><code class="language-plaintext highlighter-rouge">LightAggregateAndProof</code></a></li>
+              <li><a href="#signedlightaggregateandproof"><code class="language-plaintext highlighter-rouge">SignedLightAggregateAndProof</code></a></li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li><a href="#how-to-avoid-slashing">How to avoid slashing</a>
+    <ul>
+      <li><a href="#custody-slashing">Custody slashing</a></li>
+    </ul>
+  </li>
+</ul>
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+<!-- /TOC -->
+
+<h2 id="introduction">Introduction</h2>
+
+<p>This document represents the expected behavior of an “honest validator” with respect to Phase 1 of the Ethereum 2.0 protocol. This document does not distinguish between a “node” (i.e. the functionality of following and reading the beacon chain) and a “validator client” (i.e. the functionality of actively participating in consensus). The separation of concerns between these (potentially) two pieces of software is left as a design decision that is out of scope.</p>
+
+<p>A validator is an entity that participates in the consensus of the Ethereum 2.0 protocol. This is an optional role for users in which they can post ETH as collateral and verify and attest to the validity of blocks to seek financial returns in exchange for building and securing the protocol. This is similar to proof-of-work networks in which miners provide collateral in the form of hardware/hash-power to seek returns in exchange for building and securing the protocol.</p>
+
+<h2 id="prerequisites">Prerequisites</h2>
+
+<p>This document is an extension of the <a href="/eth2specs/specs/phase0/validator.html">Phase 0 – Validator</a>. All behaviors and definitions defined in the Phase 0 doc carry over unless explicitly noted or overridden.</p>
+
+<p>All terminology, constants, functions, and protocol mechanics defined in the <a href="/eth2specs/specs/phase1/beacon-chain.html">Phase 1 – The Beacon Chain</a> and <a href="/eth2specs/specs/phase1/custody-game.html">Phase 1 – Custody Game</a> docs are requisite for this document and used throughout. Please see the Phase 1 docs before continuing and use them as a reference throughout.</p>
+
+<h2 id="constants">Constants</h2>
+
+<p>See constants from <a href="/eth2specs/specs/phase0/validator.html#constants">Phase 0 validator guide</a>.</p>
+
+<h3 id="misc">Misc</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+      <th style="text-align: center">Unit</th>
+      <th style="text-align: center">Duration</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">TARGET_LIGHT_CLIENT_AGGREGATORS_PER_SLOT</code></td>
+      <td><code class="language-plaintext highlighter-rouge">2**3</code> (= 8)</td>
+      <td style="text-align: center">validators</td>
+      <td style="text-align: center"> </td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">LIGHT_CLIENT_PREPARATION_EPOCHS</code></td>
+      <td><code class="language-plaintext highlighter-rouge">2**2</code> (= 4)</td>
+      <td style="text-align: center">epochs</td>
+      <td style="text-align: center"> </td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="becoming-a-validator">Becoming a validator</h2>
+
+<p>Becoming a validator in Phase 1 is unchanged from Phase 0. See the <a href="/eth2specs/specs/phase0/validator.html#becoming-a-validator">Phase 0 validator guide</a> for details.</p>
+
+<h2 id="beacon-chain-validator-assignments">Beacon chain validator assignments</h2>
+
+<p>Beacon chain validator assignments to beacon committees and beacon block proposal are unchanged from Phase 0. See the <a href="/eth2specs/specs/phase0/validator.html#validator-assignments">Phase 0 validator guide</a> for details.</p>
+
+<h3 id="lookahead">Lookahead</h3>
+
+<p>Lookahead for beacon committee assignments operates in the same manner as Phase 0, but committee members must join a shard block pubsub topic in addition to the committee attestation topic.</p>
+
+<p>Specifically <em>after</em> finding stable peers of attestation subnets (see Phase 0) a validator should:</p>
+<ul>
+  <li>Let <code class="language-plaintext highlighter-rouge">shard = compute_shard_from_committee_index(state, committee_index, slot)</code></li>
+  <li>Subscribe to the pubsub topic <code class="language-plaintext highlighter-rouge">shard_{shard}_block</code> (attestation subnet peers should have this topic available).</li>
+</ul>
+
+<p>TODO: For now, the <code class="language-plaintext highlighter-rouge">state</code> we pass to <code class="language-plaintext highlighter-rouge">compute_shard_from_committee_index</code> is the current state without considering <code class="language-plaintext highlighter-rouge">len(state.shard_states)</code>, i.e., the result from <code class="language-plaintext highlighter-rouge">get_active_shard_count(state)</code> changes. We should fix it when we have shard count update logic.</p>
+
+<h2 id="beacon-chain-responsibilities">Beacon chain responsibilities</h2>
+
+<p>A validator has two primary responsibilities to the beacon chain: <a href="#block-proposal">proposing blocks</a> and <a href="#attesting">creating attestations</a>. Proposals happen infrequently, whereas attestations should be created once per epoch.</p>
+
+<p>These responsibilities are largely unchanged from Phase 0, but utilize the updated <code class="language-plaintext highlighter-rouge">SignedBeaconBlock</code>, <code class="language-plaintext highlighter-rouge">BeaconBlock</code>,  <code class="language-plaintext highlighter-rouge">BeaconBlockBody</code>, <code class="language-plaintext highlighter-rouge">Attestation</code>, and <code class="language-plaintext highlighter-rouge">AttestationData</code> definitions found in Phase 1. Below notes only the additional and modified behavior with respect to Phase 0.</p>
+
+<p>Phase 1 adds light client committees and associated responsibilities, discussed <a href="#light-client-committee">below</a>.</p>
+
+<h3 id="block-proposal">Block proposal</h3>
+
+<h4 id="preparing-for-a-beaconblock">Preparing for a <code class="language-plaintext highlighter-rouge">BeaconBlock</code></h4>
+
+<p><code class="language-plaintext highlighter-rouge">slot</code>, <code class="language-plaintext highlighter-rouge">proposer_index</code>, <code class="language-plaintext highlighter-rouge">parent_root</code>, <code class="language-plaintext highlighter-rouge">state_root</code> fields are unchanged.</p>
+
+<h4 id="constructing-the-beaconblockbody">Constructing the <code class="language-plaintext highlighter-rouge">BeaconBlockBody</code></h4>
+
+<p><code class="language-plaintext highlighter-rouge">randao_reveal</code>, <code class="language-plaintext highlighter-rouge">eth1_data</code>, and <code class="language-plaintext highlighter-rouge">graffiti</code> are unchanged.</p>
+
+<p><code class="language-plaintext highlighter-rouge">proposer_slashings</code>, <code class="language-plaintext highlighter-rouge">deposits</code>, and <code class="language-plaintext highlighter-rouge">voluntary_exits</code> are unchanged.</p>
+
+<p><code class="language-plaintext highlighter-rouge">attester_slashings</code> and <code class="language-plaintext highlighter-rouge">attestations</code> operate exactly as in Phase 0, but with new definitations of <code class="language-plaintext highlighter-rouge">AttesterSlashing</code> and <code class="language-plaintext highlighter-rouge">Attestation</code>, along with modified validation conditions found in <code class="language-plaintext highlighter-rouge">process_attester_slashing</code> and <code class="language-plaintext highlighter-rouge">process_attestation</code>.</p>
+
+<h5 id="custody-slashings">Custody slashings</h5>
+
+<p>Up to <code class="language-plaintext highlighter-rouge">MAX_CUSTODY_SLASHINGS</code>, <a href="/eth2specs/specs/phase1/custody-game.html#custodyslashing"><code class="language-plaintext highlighter-rouge">CustodySlashing</code></a> objects can be included in the <code class="language-plaintext highlighter-rouge">block</code>. The custody slashings must satisfy the verification conditions found in <a href="/eth2specs/specs/phase1/custody-game.html#custody-slashings">custody slashings processing</a>. The validator receives a small “whistleblower” reward for each custody slashing included (THIS IS NOT CURRENTLY THE CASE BUT PROBABLY SHOULD BE).</p>
+
+<h5 id="custody-key-reveals">Custody key reveals</h5>
+
+<p>Up to <code class="language-plaintext highlighter-rouge">MAX_CUSTODY_KEY_REVEALS</code>, <a href="/eth2specs/specs/phase1/custody-game.html#custodykeyreveal"><code class="language-plaintext highlighter-rouge">CustodyKeyReveal</code></a> objects can be included in the <code class="language-plaintext highlighter-rouge">block</code>. The custody key reveals must satisfy the verification conditions found in <a href="/eth2specs/specs/phase1/custody-game.html#custody-key-reveals">custody key reveal processing</a>. The validator receives a small reward for each custody key reveal included.</p>
+
+<h5 id="early-derived-secret-reveals">Early derived secret reveals</h5>
+
+<p>Up to <code class="language-plaintext highlighter-rouge">MAX_EARLY_DERIVED_SECRET_REVEALS</code>, <a href="/eth2specs/specs/phase1/custody-game.html#earlyderivedsecretreveal"><code class="language-plaintext highlighter-rouge">EarlyDerivedSecretReveal</code></a> objects can be included in the <code class="language-plaintext highlighter-rouge">block</code>. The early derived secret reveals must satisfy the verification conditions found in <a href="/eth2specs/specs/phase1/custody-game.html#custody-key-reveals">early derived secret reveal processing</a>. The validator receives a small “whistleblower” reward for each early derived secrete reveal included.</p>
+
+<h5 id="shard-transitions">Shard transitions</h5>
+
+<p>Exactly <code class="language-plaintext highlighter-rouge">MAX_SHARDS</code> <a href="/eth2specs/specs/phase1/beacon-chain.html#shardtransition"><code class="language-plaintext highlighter-rouge">ShardTransition</code></a> objects are included in the block. Default each to an empty <code class="language-plaintext highlighter-rouge">ShardTransition()</code>. Then for each committee assigned to the slot with an associated <code class="language-plaintext highlighter-rouge">committee_index</code> and <code class="language-plaintext highlighter-rouge">shard</code>, set <code class="language-plaintext highlighter-rouge">shard_transitions[shard] = full_transitions[winning_root]</code> if the committee had enough weight to form a crosslink this slot.</p>
+
+<p>Specifically:</p>
+<ul>
+  <li>Call <code class="language-plaintext highlighter-rouge">shards, winning_roots = get_shard_winning_roots(state, block.body.attestations)</code></li>
+  <li>Let <code class="language-plaintext highlighter-rouge">full_transitions</code> be a dictionary mapping from the <code class="language-plaintext highlighter-rouge">shard_transition_root</code>s found in <code class="language-plaintext highlighter-rouge">attestations</code> to the corresponding full <code class="language-plaintext highlighter-rouge">ShardTransition</code></li>
+  <li>Then for each <code class="language-plaintext highlighter-rouge">shard</code> and <code class="language-plaintext highlighter-rouge">winning_root</code> in <code class="language-plaintext highlighter-rouge">zip(shards, winning_roots)</code> set <code class="language-plaintext highlighter-rouge">shard_transitions[shard] = full_transitions[winning_root]</code></li>
+</ul>
+
+<p><em>Note</em>: The <code class="language-plaintext highlighter-rouge">state</code> passed into <code class="language-plaintext highlighter-rouge">get_shard_winning_roots</code> must be transitioned the slot of <code class="language-plaintext highlighter-rouge">block.slot</code> to run accurately due to the internal use of <code class="language-plaintext highlighter-rouge">get_online_validator_indices</code> and <code class="language-plaintext highlighter-rouge">is_on_time_attestation</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_shard_winning_roots</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+                            <span class="n">attestations</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Attestation</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="n">Shard</span><span class="p">],</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Root</span><span class="p">]]:</span>
+    <span class="n">shards</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">winning_roots</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">online_indices</span> <span class="o">=</span> <span class="n">get_online_validator_indices</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="n">on_time_attestation_slot</span> <span class="o">=</span> <span class="n">compute_previous_slot</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span>
+    <span class="n">committee_count</span> <span class="o">=</span> <span class="n">get_committee_count_per_slot</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">on_time_attestation_slot</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">committee_index</span> <span class="ow">in</span> <span class="nb">map</span><span class="p">(</span><span class="n">CommitteeIndex</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="n">committee_count</span><span class="p">)):</span>
+        <span class="n">shard</span> <span class="o">=</span> <span class="n">compute_shard_from_committee_index</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">committee_index</span><span class="p">,</span> <span class="n">on_time_attestation_slot</span><span class="p">)</span>
+        <span class="c1"># All attestations in the block for this committee/shard and are "on time"
+</span>        <span class="n">shard_attestations</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">attestation</span> <span class="k">for</span> <span class="n">attestation</span> <span class="ow">in</span> <span class="n">attestations</span>
+            <span class="k">if</span> <span class="n">is_on_time_attestation</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">)</span> <span class="ow">and</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">index</span> <span class="o">==</span> <span class="n">committee_index</span>
+        <span class="p">]</span>
+        <span class="n">committee</span> <span class="o">=</span> <span class="n">get_beacon_committee</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">on_time_attestation_slot</span><span class="p">,</span> <span class="n">committee_index</span><span class="p">)</span>
+
+        <span class="c1"># Loop over all shard transition roots, looking for a winning root
+</span>        <span class="n">shard_transition_roots</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">a</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">shard_transition_root</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">shard_attestations</span><span class="p">)</span>  <span class="c1"># non-duplicate
+</span>        <span class="k">for</span> <span class="n">shard_transition_root</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">shard_transition_roots</span><span class="p">):</span>
+            <span class="n">transition_attestations</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">shard_attestations</span>
+                <span class="k">if</span> <span class="n">a</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">shard_transition_root</span> <span class="o">==</span> <span class="n">shard_transition_root</span>
+            <span class="p">]</span>
+            <span class="n">transition_participants</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="n">ValidatorIndex</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">attestation</span> <span class="ow">in</span> <span class="n">transition_attestations</span><span class="p">:</span>
+                <span class="n">participants</span> <span class="o">=</span> <span class="n">get_attesting_indices</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">,</span> <span class="n">attestation</span><span class="p">.</span><span class="n">aggregation_bits</span><span class="p">)</span>
+                <span class="n">transition_participants</span> <span class="o">=</span> <span class="n">transition_participants</span><span class="p">.</span><span class="n">union</span><span class="p">(</span><span class="n">participants</span><span class="p">)</span>
+
+            <span class="n">enough_online_stake</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">get_total_balance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">online_indices</span><span class="p">.</span><span class="n">intersection</span><span class="p">(</span><span class="n">transition_participants</span><span class="p">))</span> <span class="o">*</span> <span class="mi">3</span> <span class="o">&gt;=</span>
+                <span class="n">get_total_balance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">online_indices</span><span class="p">.</span><span class="n">intersection</span><span class="p">(</span><span class="n">committee</span><span class="p">))</span> <span class="o">*</span> <span class="mi">2</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">enough_online_stake</span><span class="p">:</span>
+                <span class="n">shards</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">shard</span><span class="p">)</span>
+                <span class="n">winning_roots</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">shard_transition_root</span><span class="p">)</span>
+                <span class="k">break</span>
+
+    <span class="k">return</span> <span class="n">shards</span><span class="p">,</span> <span class="n">winning_roots</span>
+</code></pre></div></div>
+
+<h5 id="light-client-fields">Light client fields</h5>
+
+<p>First retrieve <code class="language-plaintext highlighter-rouge">best_aggregate</code> from <code class="language-plaintext highlighter-rouge">get_best_light_client_aggregate(block, aggregates)</code> where <code class="language-plaintext highlighter-rouge">aggregates</code> is a list of valid aggregated <code class="language-plaintext highlighter-rouge">LightClientVote</code>s for the previous slot.</p>
+
+<p>Then:</p>
+<ul>
+  <li>Set <code class="language-plaintext highlighter-rouge">light_client_bits = best_aggregate.aggregation_bits</code></li>
+  <li>Set <code class="language-plaintext highlighter-rouge">light_client_signature = best_aggregate.signature</code></li>
+</ul>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_best_light_client_aggregate</span><span class="p">(</span><span class="n">block</span><span class="p">:</span> <span class="n">BeaconBlock</span><span class="p">,</span>
+                                    <span class="n">aggregates</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">LightClientVote</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">LightClientVote</span><span class="p">:</span>
+    <span class="n">viable_aggregates</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">aggregate</span> <span class="k">for</span> <span class="n">aggregate</span> <span class="ow">in</span> <span class="n">aggregates</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="n">aggregate</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">slot</span> <span class="o">==</span> <span class="n">compute_previous_slot</span><span class="p">(</span><span class="n">block</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="n">aggregate</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">beacon_block_root</span> <span class="o">==</span> <span class="n">block</span><span class="p">.</span><span class="n">parent_root</span>
+        <span class="p">)</span>
+    <span class="p">]</span>
+
+    <span class="k">return</span> <span class="nb">max</span><span class="p">(</span>
+        <span class="n">viable_aggregates</span><span class="p">,</span>
+        <span class="c1"># Ties broken by lexicographically by hash_tree_root
+</span>        <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">a</span><span class="p">:</span> <span class="p">(</span><span class="nb">len</span><span class="p">([</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">a</span><span class="p">.</span><span class="n">aggregation_bits</span> <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]),</span> <span class="n">hash_tree_root</span><span class="p">(</span><span class="n">a</span><span class="p">)),</span>
+        <span class="n">default</span><span class="o">=</span><span class="n">LightClientVote</span><span class="p">(),</span>
+    <span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="packaging-into-a-signedbeaconblock">Packaging into a <code class="language-plaintext highlighter-rouge">SignedBeaconBlock</code></h4>
+
+<p>Packaging into a <code class="language-plaintext highlighter-rouge">SignedBeaconBlock</code> is unchanged from Phase 0.</p>
+
+<h3 id="attesting">Attesting</h3>
+
+<p>A validator is expected to create, sign, and broadcast an attestation during each epoch.</p>
+
+<p>Assignments and the core of this duty are unchanged from Phase 0. There are a few additional fields related to the assigned shard chain.</p>
+
+<p>The <code class="language-plaintext highlighter-rouge">Attestation</code> and <code class="language-plaintext highlighter-rouge">AttestationData</code> defined in the <a href="/eth2specs/specs/phase1/beacon-chain.html">Phase 1 Beacon Chain spec</a> utilizes <code class="language-plaintext highlighter-rouge">shard_transition_root: Root</code> rather than a full <code class="language-plaintext highlighter-rouge">ShardTransition</code>. For the purposes of the validator and p2p layer, a modified <code class="language-plaintext highlighter-rouge">FullAttestationData</code> and containing <code class="language-plaintext highlighter-rouge">FullAttestation</code> are used to send the accompanying <code class="language-plaintext highlighter-rouge">ShardTransition</code> in its entirety. Note that due to the properties of SSZ <code class="language-plaintext highlighter-rouge">hash_tree_root</code>, the root and signatures of <code class="language-plaintext highlighter-rouge">AttestationData</code> and <code class="language-plaintext highlighter-rouge">FullAttestationData</code> are equivalent.</p>
+
+<h4 id="fullattestationdata"><code class="language-plaintext highlighter-rouge">FullAttestationData</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">FullAttestationData</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span>
+    <span class="n">index</span><span class="p">:</span> <span class="n">CommitteeIndex</span>
+    <span class="c1"># LMD GHOST vote
+</span>    <span class="n">beacon_block_root</span><span class="p">:</span> <span class="n">Root</span>
+    <span class="c1"># FFG vote
+</span>    <span class="n">source</span><span class="p">:</span> <span class="n">Checkpoint</span>
+    <span class="n">target</span><span class="p">:</span> <span class="n">Checkpoint</span>
+    <span class="c1"># Current-slot shard block root
+</span>    <span class="n">shard_head_root</span><span class="p">:</span> <span class="n">Root</span>
+    <span class="c1"># Full shard transition
+</span>    <span class="n">shard_transition</span><span class="p">:</span> <span class="n">ShardTransition</span>
+</code></pre></div></div>
+
+<h4 id="fullattestation"><code class="language-plaintext highlighter-rouge">FullAttestation</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">FullAttestation</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">aggregation_bits</span><span class="p">:</span> <span class="n">Bitlist</span><span class="p">[</span><span class="n">MAX_VALIDATORS_PER_COMMITTEE</span><span class="p">]</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">FullAttestationData</span>
+    <span class="n">signature</span><span class="p">:</span> <span class="n">BLSSignature</span>
+</code></pre></div></div>
+
+<h4 id="timing">Timing</h4>
+
+<p>Note the timing of when to create/broadcast is altered from Phase 1.</p>
+
+<p>A validator should create and broadcast the <code class="language-plaintext highlighter-rouge">attestation</code> to the associated attestation subnet when either (a) the validator has received a valid <code class="language-plaintext highlighter-rouge">BeaconBlock</code> from the expected beacon block proposer and a valid <code class="language-plaintext highlighter-rouge">ShardBlock</code> for the expected shard block proposer for the assigned <code class="language-plaintext highlighter-rouge">slot</code> or (b) one-half of the <code class="language-plaintext highlighter-rouge">slot</code> has transpired (<code class="language-plaintext highlighter-rouge">SECONDS_PER_SLOT / 2</code> seconds after the start of <code class="language-plaintext highlighter-rouge">slot</code>) – whichever comes <em>first</em>.</p>
+
+<h4 id="attestation-data">Attestation data</h4>
+
+<p><code class="language-plaintext highlighter-rouge">attestation_data</code> is constructed in the same manner as Phase 0 but uses <code class="language-plaintext highlighter-rouge">FullAttestationData</code> with the addition of two fields – <code class="language-plaintext highlighter-rouge">shard_head_root</code> and <code class="language-plaintext highlighter-rouge">shard_transition</code>.</p>
+
+<ul>
+  <li>Let <code class="language-plaintext highlighter-rouge">head_block</code> be the result of running the fork choice during the assigned slot.</li>
+  <li>Let <code class="language-plaintext highlighter-rouge">head_state</code> be the state of <code class="language-plaintext highlighter-rouge">head_block</code> processed through any empty slots up to the assigned slot using <code class="language-plaintext highlighter-rouge">process_slots(state, slot)</code>.</li>
+  <li>Let <code class="language-plaintext highlighter-rouge">shard_head_block</code> be the result of running the fork choice on the assigned shard chain during the assigned slot.</li>
+  <li>Let <code class="language-plaintext highlighter-rouge">shard_blocks</code> be the shard blocks in the chain starting immediately <em>after</em> the most recent crosslink (<code class="language-plaintext highlighter-rouge">head_state.shard_transitions[shard].latest_block_root</code>) up to the <code class="language-plaintext highlighter-rouge">shard_head_block</code> (i.e. the value of the shard fork choice store of <code class="language-plaintext highlighter-rouge">get_pending_shard_blocks(store, shard_store)</code>).</li>
+</ul>
+
+<p><em>Note</em>: We assume that the fork choice only follows branches with valid <code class="language-plaintext highlighter-rouge">offset_slots</code> with respect to the most recent beacon state shard transition for the queried shard.</p>
+
+<h5 id="shard-head-root">Shard head root</h5>
+
+<p>If <code class="language-plaintext highlighter-rouge">attestation_data.slot == GENESIS_SLOT</code>, set <code class="language-plaintext highlighter-rouge">attestation_data.shard_head_root = Root()</code>. Otherwise, set <code class="language-plaintext highlighter-rouge">attestation_data.shard_head_root = hash_tree_root(shard_head_block)</code>.</p>
+
+<h5 id="shard-transition">Shard transition</h5>
+
+<p>Set <code class="language-plaintext highlighter-rouge">shard_transition</code> to the value returned by <code class="language-plaintext highlighter-rouge">get_shard_transition(head_state, shard, shard_blocks)</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_shard_transition_fields</span><span class="p">(</span>
+    <span class="n">beacon_state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+    <span class="n">shard</span><span class="p">:</span> <span class="n">Shard</span><span class="p">,</span>
+    <span class="n">shard_blocks</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">SignedShardBlock</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="n">uint64</span><span class="p">],</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Root</span><span class="p">],</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">ShardState</span><span class="p">]]:</span>
+    <span class="n">shard_block_lengths</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c1"># type: PyList[uint64]
+</span>    <span class="n">shard_data_roots</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c1"># type: PyList[Root]
+</span>    <span class="n">shard_states</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c1"># type: PyList[ShardState]
+</span>
+    <span class="n">shard_state</span> <span class="o">=</span> <span class="n">beacon_state</span><span class="p">.</span><span class="n">shard_states</span><span class="p">[</span><span class="n">shard</span><span class="p">]</span>
+    <span class="n">shard_block_slots</span> <span class="o">=</span> <span class="p">[</span><span class="n">shard_block</span><span class="p">.</span><span class="n">message</span><span class="p">.</span><span class="n">slot</span> <span class="k">for</span> <span class="n">shard_block</span> <span class="ow">in</span> <span class="n">shard_blocks</span><span class="p">]</span>
+    <span class="n">offset_slots</span> <span class="o">=</span> <span class="n">compute_offset_slots</span><span class="p">(</span>
+        <span class="n">get_latest_slot_for_shard</span><span class="p">(</span><span class="n">beacon_state</span><span class="p">,</span> <span class="n">shard</span><span class="p">),</span>
+        <span class="n">Slot</span><span class="p">(</span><span class="n">beacon_state</span><span class="p">.</span><span class="n">slot</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">)</span>
+    <span class="k">for</span> <span class="n">slot</span> <span class="ow">in</span> <span class="n">offset_slots</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">slot</span> <span class="ow">in</span> <span class="n">shard_block_slots</span><span class="p">:</span>
+            <span class="n">shard_block</span> <span class="o">=</span> <span class="n">shard_blocks</span><span class="p">[</span><span class="n">shard_block_slots</span><span class="p">.</span><span class="n">index</span><span class="p">(</span><span class="n">slot</span><span class="p">)]</span>
+            <span class="n">shard_data_roots</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">hash_tree_root</span><span class="p">(</span><span class="n">shard_block</span><span class="p">.</span><span class="n">message</span><span class="p">.</span><span class="n">body</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">shard_block</span> <span class="o">=</span> <span class="n">SignedShardBlock</span><span class="p">(</span><span class="n">message</span><span class="o">=</span><span class="n">ShardBlock</span><span class="p">(</span><span class="n">slot</span><span class="o">=</span><span class="n">slot</span><span class="p">,</span> <span class="n">shard</span><span class="o">=</span><span class="n">shard</span><span class="p">))</span>
+            <span class="n">shard_data_roots</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">Root</span><span class="p">())</span>
+        <span class="n">shard_state</span> <span class="o">=</span> <span class="n">shard_state</span><span class="p">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">process_shard_block</span><span class="p">(</span><span class="n">shard_state</span><span class="p">,</span> <span class="n">shard_block</span><span class="p">.</span><span class="n">message</span><span class="p">)</span>
+        <span class="n">shard_states</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">shard_state</span><span class="p">)</span>
+        <span class="n">shard_block_lengths</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">uint64</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">shard_block</span><span class="p">.</span><span class="n">message</span><span class="p">.</span><span class="n">body</span><span class="p">)))</span>
+
+    <span class="k">return</span> <span class="n">shard_block_lengths</span><span class="p">,</span> <span class="n">shard_data_roots</span><span class="p">,</span> <span class="n">shard_states</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_shard_transition</span><span class="p">(</span><span class="n">beacon_state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+                         <span class="n">shard</span><span class="p">:</span> <span class="n">Shard</span><span class="p">,</span>
+                         <span class="n">shard_blocks</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">SignedShardBlock</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">ShardTransition</span><span class="p">:</span>
+    <span class="c1"># NOTE: We currently set `PHASE_1_FORK_SLOT` to `GENESIS_SLOT` for test vectors.
+</span>    <span class="k">if</span> <span class="n">beacon_state</span><span class="p">.</span><span class="n">slot</span> <span class="o">==</span> <span class="n">GENESIS_SLOT</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">ShardTransition</span><span class="p">()</span>
+
+    <span class="n">offset_slots</span> <span class="o">=</span> <span class="n">compute_offset_slots</span><span class="p">(</span>
+        <span class="n">get_latest_slot_for_shard</span><span class="p">(</span><span class="n">beacon_state</span><span class="p">,</span> <span class="n">shard</span><span class="p">),</span>
+        <span class="n">Slot</span><span class="p">(</span><span class="n">beacon_state</span><span class="p">.</span><span class="n">slot</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">)</span>
+    <span class="n">shard_block_lengths</span><span class="p">,</span> <span class="n">shard_data_roots</span><span class="p">,</span> <span class="n">shard_states</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">get_shard_transition_fields</span><span class="p">(</span><span class="n">beacon_state</span><span class="p">,</span> <span class="n">shard</span><span class="p">,</span> <span class="n">shard_blocks</span><span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">shard_blocks</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">proposer_signatures</span> <span class="o">=</span> <span class="p">[</span><span class="n">shard_block</span><span class="p">.</span><span class="n">signature</span> <span class="k">for</span> <span class="n">shard_block</span> <span class="ow">in</span> <span class="n">shard_blocks</span><span class="p">]</span>
+        <span class="n">proposer_signature_aggregate</span> <span class="o">=</span> <span class="n">bls</span><span class="p">.</span><span class="n">Aggregate</span><span class="p">(</span><span class="n">proposer_signatures</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">proposer_signature_aggregate</span> <span class="o">=</span> <span class="n">NO_SIGNATURE</span>
+
+    <span class="k">return</span> <span class="n">ShardTransition</span><span class="p">(</span>
+        <span class="n">start_slot</span><span class="o">=</span><span class="n">offset_slots</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+        <span class="n">shard_block_lengths</span><span class="o">=</span><span class="n">shard_block_lengths</span><span class="p">,</span>
+        <span class="n">shard_data_roots</span><span class="o">=</span><span class="n">shard_data_roots</span><span class="p">,</span>
+        <span class="n">shard_states</span><span class="o">=</span><span class="n">shard_states</span><span class="p">,</span>
+        <span class="n">proposer_signature_aggregate</span><span class="o">=</span><span class="n">proposer_signature_aggregate</span><span class="p">,</span>
+    <span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="construct-attestation">Construct attestation</h4>
+
+<p>Next, the validator creates <code class="language-plaintext highlighter-rouge">attestation</code>, a <code class="language-plaintext highlighter-rouge">FullAttestation</code> as defined above.</p>
+
+<p><code class="language-plaintext highlighter-rouge">attestation.data</code>, <code class="language-plaintext highlighter-rouge">attestation.aggregation_bits</code>, and <code class="language-plaintext highlighter-rouge">attestation.signature</code> are unchanged from Phase 0. But safety/validity in signing the message is premised upon calculation of the “custody bit” [TODO].</p>
+
+<h3 id="attestation-aggregation">Attestation Aggregation</h3>
+
+<p>Some validators are selected to locally aggregate attestations with a similar <code class="language-plaintext highlighter-rouge">attestation_data</code> to their constructed <code class="language-plaintext highlighter-rouge">attestation</code> for the assigned <code class="language-plaintext highlighter-rouge">slot</code>.</p>
+
+<p>Aggregation selection and the core of this duty are largely unchanged from Phase 0. Any additional components or changes are noted.</p>
+
+<h4 id="broadcast-aggregate">Broadcast aggregate</h4>
+
+<p>Note the timing of when to broadcast aggregates is altered in Phase 1+.</p>
+
+<p>If the validator is selected to aggregate (<code class="language-plaintext highlighter-rouge">is_aggregator</code>), then they broadcast their best aggregate as a <code class="language-plaintext highlighter-rouge">SignedAggregateAndProof</code> to the global aggregate channel (<code class="language-plaintext highlighter-rouge">beacon_aggregate_and_proof</code>) three-fourths of the way through the <code class="language-plaintext highlighter-rouge">slot</code> – that is, <code class="language-plaintext highlighter-rouge">SECONDS_PER_SLOT * 3 / 4</code> seconds after the start of <code class="language-plaintext highlighter-rouge">slot</code>.</p>
+
+<h5 id="aggregateandproof"><code class="language-plaintext highlighter-rouge">AggregateAndProof</code></h5>
+
+<p><code class="language-plaintext highlighter-rouge">AggregateAndProof</code> is unchanged other than the contained <code class="language-plaintext highlighter-rouge">Attestation</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">AggregateAndProof</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">aggregator_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span>
+    <span class="n">aggregate</span><span class="p">:</span> <span class="n">Attestation</span>
+    <span class="n">selection_proof</span><span class="p">:</span> <span class="n">BLSSignature</span>
+</code></pre></div></div>
+
+<h5 id="signedaggregateandproof"><code class="language-plaintext highlighter-rouge">SignedAggregateAndProof</code></h5>
+
+<p><code class="language-plaintext highlighter-rouge">AggregateAndProof</code> is unchanged other than the contained <code class="language-plaintext highlighter-rouge">AggregateAndProof</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">SignedAggregateAndProof</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">message</span><span class="p">:</span> <span class="n">AggregateAndProof</span>
+    <span class="n">signature</span><span class="p">:</span> <span class="n">BLSSignature</span>
+</code></pre></div></div>
+
+<h3 id="light-client-committee">Light client committee</h3>
+
+<p>In addition to the core beacon chain responsibilities, Phase 1 adds an additional role – the Light Client Committee – to aid in light client functionality.</p>
+
+<p>Validators serve on the light client committee for <code class="language-plaintext highlighter-rouge">LIGHT_CLIENT_COMMITTEE_PERIOD</code> epochs and the assignment to be on a committee is known <code class="language-plaintext highlighter-rouge">LIGHT_CLIENT_COMMITTEE_PERIOD</code> epochs in advance.</p>
+
+<h4 id="preparation">Preparation</h4>
+
+<p>When <code class="language-plaintext highlighter-rouge">get_current_epoch(state) % LIGHT_CLIENT_COMMITTEE_PERIOD == LIGHT_CLIENT_COMMITTEE_PERIOD - LIGHT_CLIENT_PREPARATION_EPOCHS</code> each validator must check if they are in the next period light client committee by calling <code class="language-plaintext highlighter-rouge">is_in_next_light_client_committee()</code>.</p>
+
+<p>If the validator is in the next light client committee, they must join the <code class="language-plaintext highlighter-rouge">light_client_votes</code> pubsub topic to begin duties at the start of the next period.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">is_in_next_light_client_committee</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="n">ValidatorIndex</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="n">next_committee</span> <span class="o">=</span> <span class="n">get_light_client_committee</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">)</span> <span class="o">+</span> <span class="n">LIGHT_CLIENT_COMMITTEE_PERIOD</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">next_committee</span>
+</code></pre></div></div>
+
+<h4 id="light-client-vote">Light client vote</h4>
+
+<p>During a period of epochs that the validator is a part of the light client committee (<code class="language-plaintext highlighter-rouge">validator_index in get_light_client_committee(state, epoch)</code>), the validator creates and broadcasts a <code class="language-plaintext highlighter-rouge">LightClientVote</code> at each slot.</p>
+
+<p>A validator should create and broadcast the <code class="language-plaintext highlighter-rouge">light_client_vote</code> to the <code class="language-plaintext highlighter-rouge">light_client_votes</code> pubsub topic when either (a) the validator has received a valid block from the expected block proposer for the current <code class="language-plaintext highlighter-rouge">slot</code> or (b) one-third of the <code class="language-plaintext highlighter-rouge">slot</code> have transpired (<code class="language-plaintext highlighter-rouge">SECONDS_PER_SLOT / 3</code> seconds after the start of <code class="language-plaintext highlighter-rouge">slot</code>) – whichever comes <em>first</em>.</p>
+
+<ul>
+  <li>Let <code class="language-plaintext highlighter-rouge">light_client_committee = get_light_client_committee(state, compute_epoch_at_slot(slot))</code></li>
+</ul>
+
+<h5 id="light-client-vote-data">Light client vote data</h5>
+
+<p>First the validator constructs <code class="language-plaintext highlighter-rouge">light_client_vote_data</code>, a <a href="#lightclientvotedata"><code class="language-plaintext highlighter-rouge">LightClientVoteData</code></a> object.</p>
+
+<ul>
+  <li>Let <code class="language-plaintext highlighter-rouge">head_block</code> be the result of running the fork choice during the assigned slot.</li>
+  <li>Set <code class="language-plaintext highlighter-rouge">light_client_vote.slot = slot</code>.</li>
+  <li>Set <code class="language-plaintext highlighter-rouge">light_client_vote.beacon_block_root = hash_tree_root(head_block)</code>.</li>
+</ul>
+
+<h6 id="lightclientvotedata"><code class="language-plaintext highlighter-rouge">LightClientVoteData</code></h6>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">LightClientVoteData</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span>
+    <span class="n">beacon_block_root</span><span class="p">:</span> <span class="n">Root</span>
+</code></pre></div></div>
+
+<h5 id="construct-vote">Construct vote</h5>
+
+<p>Then the validator constructs <code class="language-plaintext highlighter-rouge">light_client_vote</code>, a <a href="#lightclientvote"><code class="language-plaintext highlighter-rouge">LightClientVote</code></a> object.</p>
+
+<ul>
+  <li>Set <code class="language-plaintext highlighter-rouge">light_client_vote.data = light_client_vote_data</code>.</li>
+  <li>Set <code class="language-plaintext highlighter-rouge">light_client_vote.aggregation_bits</code> to be a <code class="language-plaintext highlighter-rouge">Bitvector[LIGHT_CLIENT_COMMITTEE_SIZE]</code>, where the bit of the index of the validator in the <code class="language-plaintext highlighter-rouge">light_client_committee</code> is set to <code class="language-plaintext highlighter-rouge">0b1</code> and all other bits are are set to <code class="language-plaintext highlighter-rouge">0b0</code>.</li>
+  <li>Set <code class="language-plaintext highlighter-rouge">light_client_vote.signature = vote_signature</code> where <code class="language-plaintext highlighter-rouge">vote_signature</code> is obtained from:</li>
+</ul>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_light_client_vote_signature</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+                                    <span class="n">light_client_vote_data</span><span class="p">:</span> <span class="n">LightClientVoteData</span><span class="p">,</span>
+                                    <span class="n">privkey</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BLSSignature</span><span class="p">:</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">DOMAIN_LIGHT_CLIENT</span><span class="p">,</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">light_client_vote_data</span><span class="p">.</span><span class="n">slot</span><span class="p">))</span>
+    <span class="n">signing_root</span> <span class="o">=</span> <span class="n">compute_signing_root</span><span class="p">(</span><span class="n">light_client_vote_data</span><span class="p">,</span> <span class="n">domain</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">bls</span><span class="p">.</span><span class="n">Sign</span><span class="p">(</span><span class="n">privkey</span><span class="p">,</span> <span class="n">signing_root</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h6 id="lightclientvote"><code class="language-plaintext highlighter-rouge">LightClientVote</code></h6>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">LightClientVote</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">LightClientVoteData</span>
+    <span class="n">aggregation_bits</span><span class="p">:</span> <span class="n">Bitvector</span><span class="p">[</span><span class="n">LIGHT_CLIENT_COMMITTEE_SIZE</span><span class="p">]</span>
+    <span class="n">signature</span><span class="p">:</span> <span class="n">BLSSignature</span>
+</code></pre></div></div>
+
+<h5 id="broadcast">Broadcast</h5>
+
+<p>Finally, the validator broadcasts <code class="language-plaintext highlighter-rouge">light_client_vote</code> to the <code class="language-plaintext highlighter-rouge">light_client_votes</code> pubsub topic.</p>
+
+<h4 id="light-client-vote-aggregation">Light client vote aggregation</h4>
+
+<p>Some validators in the light client committee are selected to locally aggregate light client votes with a similar <code class="language-plaintext highlighter-rouge">light_client_vote_data</code> to their constructed <code class="language-plaintext highlighter-rouge">light_client_vote</code> for the assigned <code class="language-plaintext highlighter-rouge">slot</code>.</p>
+
+<h4 id="aggregation-selection">Aggregation selection</h4>
+
+<p>A validator is selected to aggregate based upon the return value of <code class="language-plaintext highlighter-rouge">is_light_client_aggregator()</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_light_client_slot_signature</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span><span class="p">,</span> <span class="n">privkey</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BLSSignature</span><span class="p">:</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">DOMAIN_LIGHT_SELECTION_PROOF</span><span class="p">,</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">slot</span><span class="p">))</span>
+    <span class="n">signing_root</span> <span class="o">=</span> <span class="n">compute_signing_root</span><span class="p">(</span><span class="n">slot</span><span class="p">,</span> <span class="n">domain</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">bls</span><span class="p">.</span><span class="n">Sign</span><span class="p">(</span><span class="n">privkey</span><span class="p">,</span> <span class="n">signing_root</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">is_light_client_aggregator</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span><span class="p">,</span> <span class="n">slot_signature</span><span class="p">:</span> <span class="n">BLSSignature</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="n">committee</span> <span class="o">=</span> <span class="n">get_light_client_committee</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">slot</span><span class="p">))</span>
+    <span class="n">modulo</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">committee</span><span class="p">)</span> <span class="o">//</span> <span class="n">TARGET_LIGHT_CLIENT_AGGREGATORS_PER_SLOT</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">bytes_to_uint64</span><span class="p">(</span><span class="nb">hash</span><span class="p">(</span><span class="n">slot_signature</span><span class="p">)[</span><span class="mi">0</span><span class="p">:</span><span class="mi">8</span><span class="p">])</span> <span class="o">%</span> <span class="n">modulo</span> <span class="o">==</span> <span class="mi">0</span>
+</code></pre></div></div>
+
+<h4 id="construct-aggregate">Construct aggregate</h4>
+
+<p>If the validator is selected to aggregate (<code class="language-plaintext highlighter-rouge">is_light_client_aggregator()</code>), they construct an aggregate light client vote via the following.</p>
+
+<p>Collect <code class="language-plaintext highlighter-rouge">light_client_votes</code> seen via gossip during the <code class="language-plaintext highlighter-rouge">slot</code> that have an equivalent <code class="language-plaintext highlighter-rouge">light_client_vote_data</code> to that constructed by the validator, and create a <code class="language-plaintext highlighter-rouge">aggregate_light_client_vote: LightClientVote</code> with the following fields.</p>
+
+<ul>
+  <li>Set <code class="language-plaintext highlighter-rouge">aggregate_light_client_vote.data = light_client_vote_data</code> where <code class="language-plaintext highlighter-rouge">light_client_vote_data</code> is the <code class="language-plaintext highlighter-rouge">LightClientVoteData</code> object that is the same for each individual light client vote being aggregated.</li>
+  <li>Set <code class="language-plaintext highlighter-rouge">aggregate_light_client_vote.aggregation_bits</code> to be a <code class="language-plaintext highlighter-rouge">Bitvector[LIGHT_CLIENT_COMMITTEE_SIZE]</code>, where each bit set from each individual light client vote is set to <code class="language-plaintext highlighter-rouge">0b1</code>.</li>
+  <li>Set <code class="language-plaintext highlighter-rouge">aggregate_light_client_vote.signature = aggregate_light_client_signature</code> where <code class="language-plaintext highlighter-rouge">aggregate_light_client_signature</code> is obtained from <code class="language-plaintext highlighter-rouge">get_aggregate_light_client_signature</code>.</li>
+</ul>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_aggregate_light_client_signature</span><span class="p">(</span><span class="n">light_client_votes</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">LightClientVote</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">BLSSignature</span><span class="p">:</span>
+    <span class="n">signatures</span> <span class="o">=</span> <span class="p">[</span><span class="n">light_client_vote</span><span class="p">.</span><span class="n">signature</span> <span class="k">for</span> <span class="n">light_client_vote</span> <span class="ow">in</span> <span class="n">light_client_votes</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">bls</span><span class="p">.</span><span class="n">Aggregate</span><span class="p">(</span><span class="n">signatures</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="broadcast-aggregate-1">Broadcast aggregate</h4>
+
+<p>If the validator is selected to aggregate (<code class="language-plaintext highlighter-rouge">is_light_client_aggregator</code>), then they broadcast their best aggregate light client vote as a <code class="language-plaintext highlighter-rouge">SignedLightAggregateAndProof</code> to the global aggregate light client vote channel (<code class="language-plaintext highlighter-rouge">aggregate_light_client_votes</code>) two-thirds of the way through the <code class="language-plaintext highlighter-rouge">slot</code>-that is, <code class="language-plaintext highlighter-rouge">SECONDS_PER_SLOT * 2 / 3</code> seconds after the start of <code class="language-plaintext highlighter-rouge">slot</code>.</p>
+
+<p>Selection proofs are provided in <code class="language-plaintext highlighter-rouge">LightAggregateAndProof</code> to prove to the gossip channel that the validator has been selected as an aggregator.</p>
+
+<p><code class="language-plaintext highlighter-rouge">LightAggregateAndProof</code> messages are signed by the aggregator and broadcast inside of <code class="language-plaintext highlighter-rouge">SignedLightAggregateAndProof</code> objects to prevent a class of DoS attacks and message forgeries.</p>
+
+<p>First, <code class="language-plaintext highlighter-rouge">light_aggregate_and_proof = get_light_aggregate_and_proof(state, validator_index, aggregate_light_client_vote, privkey)</code> is constructed.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_light_aggregate_and_proof</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+                                  <span class="n">aggregator_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span><span class="p">,</span>
+                                  <span class="n">aggregate</span><span class="p">:</span> <span class="n">LightClientVote</span><span class="p">,</span>
+                                  <span class="n">privkey</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LightAggregateAndProof</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">LightAggregateAndProof</span><span class="p">(</span>
+        <span class="n">aggregator_index</span><span class="o">=</span><span class="n">aggregator_index</span><span class="p">,</span>
+        <span class="n">aggregate</span><span class="o">=</span><span class="n">aggregate</span><span class="p">,</span>
+        <span class="n">selection_proof</span><span class="o">=</span><span class="n">get_light_client_slot_signature</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">aggregate</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">slot</span><span class="p">,</span> <span class="n">privkey</span><span class="p">),</span>
+    <span class="p">)</span>
+</code></pre></div></div>
+
+<p>Then <code class="language-plaintext highlighter-rouge">signed_light_aggregate_and_proof = SignedLightAggregateAndProof(message=light_aggregate_and_proof, signature=signature)</code> is constructed and broadast. Where <code class="language-plaintext highlighter-rouge">signature</code> is obtained from:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_light_aggregate_and_proof_signature</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+                                            <span class="n">aggregate_and_proof</span><span class="p">:</span> <span class="n">LightAggregateAndProof</span><span class="p">,</span>
+                                            <span class="n">privkey</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BLSSignature</span><span class="p">:</span>
+    <span class="n">aggregate</span> <span class="o">=</span> <span class="n">aggregate_and_proof</span><span class="p">.</span><span class="n">aggregate</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">DOMAIN_LIGHT_AGGREGATE_AND_PROOF</span><span class="p">,</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">aggregate</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">slot</span><span class="p">))</span>
+    <span class="n">signing_root</span> <span class="o">=</span> <span class="n">compute_signing_root</span><span class="p">(</span><span class="n">aggregate_and_proof</span><span class="p">,</span> <span class="n">domain</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">bls</span><span class="p">.</span><span class="n">Sign</span><span class="p">(</span><span class="n">privkey</span><span class="p">,</span> <span class="n">signing_root</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h5 id="lightaggregateandproof"><code class="language-plaintext highlighter-rouge">LightAggregateAndProof</code></h5>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">LightAggregateAndProof</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">aggregator_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span>
+    <span class="n">aggregate</span><span class="p">:</span> <span class="n">LightClientVote</span>
+    <span class="n">selection_proof</span><span class="p">:</span> <span class="n">BLSSignature</span>
+</code></pre></div></div>
+
+<h5 id="signedlightaggregateandproof"><code class="language-plaintext highlighter-rouge">SignedLightAggregateAndProof</code></h5>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">SignedLightAggregateAndProof</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">message</span><span class="p">:</span> <span class="n">LightAggregateAndProof</span>
+    <span class="n">signature</span><span class="p">:</span> <span class="n">BLSSignature</span>
+</code></pre></div></div>
+
+<h2 id="how-to-avoid-slashing">How to avoid slashing</h2>
+
+<p>Proposer and Attester slashings described in Phase 0 remain in place with the
+  addition of the following.</p>
+
+<h3 id="custody-slashing">Custody slashing</h3>
+
+<p>To avoid custody slashings, the attester must never sign any shard transition for which the custody bit is one. The custody bit is computed using the custody secret:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_custody_secret</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+                       <span class="n">validator_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span><span class="p">,</span>
+                       <span class="n">privkey</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+                       <span class="n">epoch</span><span class="p">:</span> <span class="n">Epoch</span><span class="o">=</span><span class="bp">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BLSSignature</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">epoch</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">epoch</span> <span class="o">=</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="n">period</span> <span class="o">=</span> <span class="n">get_custody_period_for_validator</span><span class="p">(</span><span class="n">validator_index</span><span class="p">,</span> <span class="n">epoch</span><span class="p">)</span>
+    <span class="n">epoch_to_sign</span> <span class="o">=</span> <span class="n">get_randao_epoch_for_custody_period</span><span class="p">(</span><span class="n">period</span><span class="p">,</span> <span class="n">validator_index</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">DOMAIN_RANDAO</span><span class="p">,</span> <span class="n">epoch_to_sign</span><span class="p">)</span>
+    <span class="n">signing_root</span> <span class="o">=</span> <span class="n">compute_signing_root</span><span class="p">(</span><span class="n">Epoch</span><span class="p">(</span><span class="n">epoch_to_sign</span><span class="p">),</span> <span class="n">domain</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">bls</span><span class="p">.</span><span class="n">Sign</span><span class="p">(</span><span class="n">privkey</span><span class="p">,</span> <span class="n">signing_root</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Note that the valid custody secret is always the one for the <strong>attestation target epoch</strong>, not to be confused with the epoch in which the shard block was generated. While they are the same most of the time, getting this wrong at custody epoch boundaries would result in a custody slashing.</p>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

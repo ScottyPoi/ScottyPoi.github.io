@@ -1,0 +1,123 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="ethereum-20-light-client-support--from-phase-0-to-light-client-patch">Ethereum 2.0 Light Client Support – From Phase 0 to Light Client Patch</h1>
+
+<p><strong>Notice</strong>: This document is a work-in-progress for researchers and implementers.</p>
+
+<h2 id="table-of-contents">Table of contents</h2>
+
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+<ul>
+  <li><a href="#introduction">Introduction</a></li>
+  <li><a href="#configuration">Configuration</a></li>
+  <li><a href="#fork-to-light-client-patch">Fork to Light-client patch</a>
+    <ul>
+      <li><a href="#fork-trigger">Fork trigger</a></li>
+      <li><a href="#upgrading-the-state">Upgrading the state</a></li>
+    </ul>
+  </li>
+</ul>
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+<h2 id="introduction">Introduction</h2>
+
+<p>This document describes the process of moving from Phase 0 to Phase 1 of Ethereum 2.0.</p>
+
+<h2 id="configuration">Configuration</h2>
+
+<p>Warning: this configuration is not definitive.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">LIGHTCLIENT_PATCH_FORK_VERSION</code></td>
+      <td><code class="language-plaintext highlighter-rouge">Version('0x01000000')</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">LIGHTCLIENT_PATCH_FORK_SLOT</code></td>
+      <td><code class="language-plaintext highlighter-rouge">Slot(0)</code> <strong>TBD</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="fork-to-light-client-patch">Fork to Light-client patch</h2>
+
+<h3 id="fork-trigger">Fork trigger</h3>
+
+<p>TBD. Social consensus, along with state conditions such as epoch boundary, finality, deposits, active validator count, etc. may be part of the decision process to trigger the fork. For now we assume the condition will be triggered at slot <code class="language-plaintext highlighter-rouge">LIGHTCLIENT_PATCH_FORK_SLOT</code>, where <code class="language-plaintext highlighter-rouge">LIGHTCLIENT_PATCH_FORK_SLOT % SLOTS_PER_EPOCH == 0</code>.</p>
+
+<h3 id="upgrading-the-state">Upgrading the state</h3>
+
+<p>After <code class="language-plaintext highlighter-rouge">process_slots</code> of Phase 0 finishes, if <code class="language-plaintext highlighter-rouge">state.slot == LIGHTCLIENT_PATCH_FORK_SLOT</code>, an irregular state change is made to upgrade to light-client patch.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">upgrade_to_lightclient_patch</span><span class="p">(</span><span class="n">pre</span><span class="p">:</span> <span class="n">phase0</span><span class="p">.</span><span class="n">BeaconState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BeaconState</span><span class="p">:</span>
+    <span class="n">epoch</span> <span class="o">=</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">pre</span><span class="p">)</span>
+    <span class="n">post</span> <span class="o">=</span> <span class="n">BeaconState</span><span class="p">(</span>
+        <span class="n">genesis_time</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">genesis_time</span><span class="p">,</span>
+        <span class="n">slot</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">slot</span><span class="p">,</span>
+        <span class="n">fork</span><span class="o">=</span><span class="n">Fork</span><span class="p">(</span>
+            <span class="n">previous_version</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">fork</span><span class="p">.</span><span class="n">current_version</span><span class="p">,</span>
+            <span class="n">current_version</span><span class="o">=</span><span class="n">LIGHTCLIENT_PATCH_FORK_VERSION</span><span class="p">,</span>
+            <span class="n">epoch</span><span class="o">=</span><span class="n">epoch</span><span class="p">,</span>
+        <span class="p">),</span>
+        <span class="c1"># History
+</span>        <span class="n">latest_block_header</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">latest_block_header</span><span class="p">,</span>
+        <span class="n">block_roots</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">block_roots</span><span class="p">,</span>
+        <span class="n">state_roots</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">state_roots</span><span class="p">,</span>
+        <span class="n">historical_roots</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">historical_roots</span><span class="p">,</span>
+        <span class="c1"># Eth1
+</span>        <span class="n">eth1_data</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">eth1_data</span><span class="p">,</span>
+        <span class="n">eth1_data_votes</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">eth1_data_votes</span><span class="p">,</span>
+        <span class="n">eth1_deposit_index</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">eth1_deposit_index</span><span class="p">,</span>
+        <span class="c1"># Registry
+</span>        <span class="n">validators</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">validators</span><span class="p">,</span>
+        <span class="n">balances</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">balances</span><span class="p">,</span>
+        <span class="c1"># Randomness
+</span>        <span class="n">randao_mixes</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">randao_mixes</span><span class="p">,</span>
+        <span class="c1"># Slashings
+</span>        <span class="n">slashings</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">slashings</span><span class="p">,</span>
+        <span class="c1"># Attestations
+</span>        <span class="c1"># previous_epoch_attestations is cleared on upgrade. 
+</span>        <span class="n">previous_epoch_attestations</span><span class="o">=</span><span class="n">List</span><span class="p">[</span><span class="n">PendingAttestation</span><span class="p">,</span> <span class="n">MAX_ATTESTATIONS</span> <span class="o">*</span> <span class="n">SLOTS_PER_EPOCH</span><span class="p">](),</span>
+        <span class="c1"># empty in pre state, since the upgrade is performed just after an epoch boundary.
+</span>        <span class="n">current_epoch_attestations</span><span class="o">=</span><span class="n">List</span><span class="p">[</span><span class="n">PendingAttestation</span><span class="p">,</span> <span class="n">MAX_ATTESTATIONS</span> <span class="o">*</span> <span class="n">SLOTS_PER_EPOCH</span><span class="p">](),</span>
+        <span class="c1"># Finality
+</span>        <span class="n">justification_bits</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">justification_bits</span><span class="p">,</span>
+        <span class="n">previous_justified_checkpoint</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">previous_justified_checkpoint</span><span class="p">,</span>
+        <span class="n">current_justified_checkpoint</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">current_justified_checkpoint</span><span class="p">,</span>
+        <span class="n">finalized_checkpoint</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">finalized_checkpoint</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="c1"># Fill in sync committees
+</span>    <span class="n">post</span><span class="p">.</span><span class="n">current_sync_committee</span> <span class="o">=</span> <span class="n">get_sync_committee</span><span class="p">(</span><span class="n">post</span><span class="p">,</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">post</span><span class="p">))</span>
+    <span class="n">post</span><span class="p">.</span><span class="n">next_sync_committee</span> <span class="o">=</span> <span class="n">get_sync_committee</span><span class="p">(</span><span class="n">post</span><span class="p">,</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">post</span><span class="p">)</span> <span class="o">+</span> <span class="n">EPOCHS_PER_SYNC_COMMITTEE_PERIOD</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">post</span>
+</code></pre></div></div>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

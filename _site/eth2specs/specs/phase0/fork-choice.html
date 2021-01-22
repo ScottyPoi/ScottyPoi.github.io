@@ -1,0 +1,440 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="ethereum-20-phase-0--beacon-chain-fork-choice">Ethereum 2.0 Phase 0 – Beacon Chain Fork Choice</h1>
+
+<h2 id="table-of-contents">Table of contents</h2>
+<!-- TOC -->
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+<ul>
+  <li><a href="#introduction">Introduction</a></li>
+  <li><a href="#fork-choice">Fork choice</a>
+    <ul>
+      <li><a href="#configuration">Configuration</a></li>
+      <li><a href="#helpers">Helpers</a>
+        <ul>
+          <li><a href="#latestmessage"><code class="language-plaintext highlighter-rouge">LatestMessage</code></a></li>
+          <li><a href="#store"><code class="language-plaintext highlighter-rouge">Store</code></a></li>
+          <li><a href="#get_forkchoice_store"><code class="language-plaintext highlighter-rouge">get_forkchoice_store</code></a></li>
+          <li><a href="#get_slots_since_genesis"><code class="language-plaintext highlighter-rouge">get_slots_since_genesis</code></a></li>
+          <li><a href="#get_current_slot"><code class="language-plaintext highlighter-rouge">get_current_slot</code></a></li>
+          <li><a href="#compute_slots_since_epoch_start"><code class="language-plaintext highlighter-rouge">compute_slots_since_epoch_start</code></a></li>
+          <li><a href="#get_ancestor"><code class="language-plaintext highlighter-rouge">get_ancestor</code></a></li>
+          <li><a href="#get_latest_attesting_balance"><code class="language-plaintext highlighter-rouge">get_latest_attesting_balance</code></a></li>
+          <li><a href="#filter_block_tree"><code class="language-plaintext highlighter-rouge">filter_block_tree</code></a></li>
+          <li><a href="#get_filtered_block_tree"><code class="language-plaintext highlighter-rouge">get_filtered_block_tree</code></a></li>
+          <li><a href="#get_head"><code class="language-plaintext highlighter-rouge">get_head</code></a></li>
+          <li><a href="#should_update_justified_checkpoint"><code class="language-plaintext highlighter-rouge">should_update_justified_checkpoint</code></a></li>
+          <li><a href="#on_attestation-helpers"><code class="language-plaintext highlighter-rouge">on_attestation</code> helpers</a>
+            <ul>
+              <li><a href="#validate_on_attestation"><code class="language-plaintext highlighter-rouge">validate_on_attestation</code></a></li>
+              <li><a href="#store_target_checkpoint_state"><code class="language-plaintext highlighter-rouge">store_target_checkpoint_state</code></a></li>
+              <li><a href="#update_latest_messages"><code class="language-plaintext highlighter-rouge">update_latest_messages</code></a></li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+      <li><a href="#handlers">Handlers</a>
+        <ul>
+          <li><a href="#on_tick"><code class="language-plaintext highlighter-rouge">on_tick</code></a></li>
+          <li><a href="#on_block"><code class="language-plaintext highlighter-rouge">on_block</code></a></li>
+          <li><a href="#on_attestation"><code class="language-plaintext highlighter-rouge">on_attestation</code></a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+<!-- /TOC -->
+
+<h2 id="introduction">Introduction</h2>
+
+<p>This document is the beacon chain fork choice spec, part of Ethereum 2.0 Phase 0. It assumes the <a href="/eth2specs/specs/phase0/beacon-chain.html">beacon chain state transition function spec</a>.</p>
+
+<h2 id="fork-choice">Fork choice</h2>
+
+<p>The head block root associated with a <code class="language-plaintext highlighter-rouge">store</code> is defined as <code class="language-plaintext highlighter-rouge">get_head(store)</code>. At genesis, let <code class="language-plaintext highlighter-rouge">store = get_forkchoice_store(genesis_state)</code> and update <code class="language-plaintext highlighter-rouge">store</code> by running:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">on_tick(store, time)</code> whenever <code class="language-plaintext highlighter-rouge">time &gt; store.time</code> where <code class="language-plaintext highlighter-rouge">time</code> is the current Unix time</li>
+  <li><code class="language-plaintext highlighter-rouge">on_block(store, block)</code> whenever a block <code class="language-plaintext highlighter-rouge">block: SignedBeaconBlock</code> is received</li>
+  <li><code class="language-plaintext highlighter-rouge">on_attestation(store, attestation)</code> whenever an attestation <code class="language-plaintext highlighter-rouge">attestation</code> is received</li>
+</ul>
+
+<p>Any of the above handlers that trigger an unhandled exception (e.g. a failed assert or an out-of-range list access) are considered invalid. Invalid calls to handlers must not modify <code class="language-plaintext highlighter-rouge">store</code>.</p>
+
+<p><em>Notes</em>:</p>
+
+<p>1) <strong>Leap seconds</strong>: Slots will last <code class="language-plaintext highlighter-rouge">SECONDS_PER_SLOT + 1</code> or <code class="language-plaintext highlighter-rouge">SECONDS_PER_SLOT - 1</code> seconds around leap seconds. This is automatically handled by <a href="https://en.wikipedia.org/wiki/Unix_time">UNIX time</a>.
+2) <strong>Honest clocks</strong>: Honest nodes are assumed to have clocks synchronized within <code class="language-plaintext highlighter-rouge">SECONDS_PER_SLOT</code> seconds of each other.
+3) <strong>Eth1 data</strong>: The large <code class="language-plaintext highlighter-rouge">ETH1_FOLLOW_DISTANCE</code> specified in the <a href="/eth2specs/specs/phase0/validator.html">honest validator document</a> should ensure that <code class="language-plaintext highlighter-rouge">state.latest_eth1_data</code> of the canonical Ethereum 2.0 chain remains consistent with the canonical Ethereum 1.0 chain. If not, emergency manual intervention will be required.
+4) <strong>Manual forks</strong>: Manual forks may arbitrarily change the fork choice rule but are expected to be enacted at epoch transitions, with the fork details reflected in <code class="language-plaintext highlighter-rouge">state.fork</code>.
+5) <strong>Implementation</strong>: The implementation found in this specification is constructed for ease of understanding rather than for optimization in computation, space, or any other resource. A number of optimized alternatives can be found <a href="https://github.com/protolambda/lmd-ghost">here</a>.</p>
+
+<h3 id="configuration">Configuration</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+      <th style="text-align: center">Unit</th>
+      <th style="text-align: center">Duration</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SAFE_SLOTS_TO_UPDATE_JUSTIFIED</code></td>
+      <td><code class="language-plaintext highlighter-rouge">2**3</code> (= 8)</td>
+      <td style="text-align: center">slots</td>
+      <td style="text-align: center">96 seconds</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="helpers">Helpers</h3>
+
+<h4 id="latestmessage"><code class="language-plaintext highlighter-rouge">LatestMessage</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">@</span><span class="n">dataclass</span><span class="p">(</span><span class="n">eq</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">frozen</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">LatestMessage</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="n">epoch</span><span class="p">:</span> <span class="n">Epoch</span>
+    <span class="n">root</span><span class="p">:</span> <span class="n">Root</span>
+</code></pre></div></div>
+
+<h4 id="store"><code class="language-plaintext highlighter-rouge">Store</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">@</span><span class="n">dataclass</span>
+<span class="k">class</span> <span class="nc">Store</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="n">time</span><span class="p">:</span> <span class="n">uint64</span>
+    <span class="n">genesis_time</span><span class="p">:</span> <span class="n">uint64</span>
+    <span class="n">justified_checkpoint</span><span class="p">:</span> <span class="n">Checkpoint</span>
+    <span class="n">finalized_checkpoint</span><span class="p">:</span> <span class="n">Checkpoint</span>
+    <span class="n">best_justified_checkpoint</span><span class="p">:</span> <span class="n">Checkpoint</span>
+    <span class="n">blocks</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Root</span><span class="p">,</span> <span class="n">BeaconBlock</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="n">block_states</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Root</span><span class="p">,</span> <span class="n">BeaconState</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="n">checkpoint_states</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Checkpoint</span><span class="p">,</span> <span class="n">BeaconState</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="n">latest_messages</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">ValidatorIndex</span><span class="p">,</span> <span class="n">LatestMessage</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="get_forkchoice_store"><code class="language-plaintext highlighter-rouge">get_forkchoice_store</code></h4>
+
+<p>The provided anchor-state will be regarded as a trusted state, to not roll back beyond.
+This should be the genesis state for a full client.</p>
+
+<p><em>Note</em> With regards to fork choice, block headers are interchangeable with blocks. The spec is likely to move to headers for reduced overhead in test vectors and better encapsulation. Full implementations store blocks as part of their database and will often use full blocks when dealing with production fork choice.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_forkchoice_store</span><span class="p">(</span><span class="n">anchor_state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">anchor_block</span><span class="p">:</span> <span class="n">BeaconBlock</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Store</span><span class="p">:</span>
+    <span class="k">assert</span> <span class="n">anchor_block</span><span class="p">.</span><span class="n">state_root</span> <span class="o">==</span> <span class="n">hash_tree_root</span><span class="p">(</span><span class="n">anchor_state</span><span class="p">)</span>
+    <span class="n">anchor_root</span> <span class="o">=</span> <span class="n">hash_tree_root</span><span class="p">(</span><span class="n">anchor_block</span><span class="p">)</span>
+    <span class="n">anchor_epoch</span> <span class="o">=</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">anchor_state</span><span class="p">)</span>
+    <span class="n">justified_checkpoint</span> <span class="o">=</span> <span class="n">Checkpoint</span><span class="p">(</span><span class="n">epoch</span><span class="o">=</span><span class="n">anchor_epoch</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="n">anchor_root</span><span class="p">)</span>
+    <span class="n">finalized_checkpoint</span> <span class="o">=</span> <span class="n">Checkpoint</span><span class="p">(</span><span class="n">epoch</span><span class="o">=</span><span class="n">anchor_epoch</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="n">anchor_root</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">Store</span><span class="p">(</span>
+        <span class="n">time</span><span class="o">=</span><span class="n">uint64</span><span class="p">(</span><span class="n">anchor_state</span><span class="p">.</span><span class="n">genesis_time</span> <span class="o">+</span> <span class="n">SECONDS_PER_SLOT</span> <span class="o">*</span> <span class="n">anchor_state</span><span class="p">.</span><span class="n">slot</span><span class="p">),</span>
+        <span class="n">genesis_time</span><span class="o">=</span><span class="n">anchor_state</span><span class="p">.</span><span class="n">genesis_time</span><span class="p">,</span>
+        <span class="n">justified_checkpoint</span><span class="o">=</span><span class="n">justified_checkpoint</span><span class="p">,</span>
+        <span class="n">finalized_checkpoint</span><span class="o">=</span><span class="n">finalized_checkpoint</span><span class="p">,</span>
+        <span class="n">best_justified_checkpoint</span><span class="o">=</span><span class="n">justified_checkpoint</span><span class="p">,</span>
+        <span class="n">blocks</span><span class="o">=</span><span class="p">{</span><span class="n">anchor_root</span><span class="p">:</span> <span class="n">copy</span><span class="p">(</span><span class="n">anchor_block</span><span class="p">)},</span>
+        <span class="n">block_states</span><span class="o">=</span><span class="p">{</span><span class="n">anchor_root</span><span class="p">:</span> <span class="n">copy</span><span class="p">(</span><span class="n">anchor_state</span><span class="p">)},</span>
+        <span class="n">checkpoint_states</span><span class="o">=</span><span class="p">{</span><span class="n">justified_checkpoint</span><span class="p">:</span> <span class="n">copy</span><span class="p">(</span><span class="n">anchor_state</span><span class="p">)},</span>
+    <span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="get_slots_since_genesis"><code class="language-plaintext highlighter-rouge">get_slots_since_genesis</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_slots_since_genesis</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">store</span><span class="p">.</span><span class="n">time</span> <span class="o">-</span> <span class="n">store</span><span class="p">.</span><span class="n">genesis_time</span><span class="p">)</span> <span class="o">//</span> <span class="n">SECONDS_PER_SLOT</span>
+</code></pre></div></div>
+
+<h4 id="get_current_slot"><code class="language-plaintext highlighter-rouge">get_current_slot</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_current_slot</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Slot</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">Slot</span><span class="p">(</span><span class="n">GENESIS_SLOT</span> <span class="o">+</span> <span class="n">get_slots_since_genesis</span><span class="p">(</span><span class="n">store</span><span class="p">))</span>
+</code></pre></div></div>
+
+<h4 id="compute_slots_since_epoch_start"><code class="language-plaintext highlighter-rouge">compute_slots_since_epoch_start</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">compute_slots_since_epoch_start</span><span class="p">(</span><span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">slot</span> <span class="o">-</span> <span class="n">compute_start_slot_at_epoch</span><span class="p">(</span><span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">slot</span><span class="p">))</span>
+</code></pre></div></div>
+
+<h4 id="get_ancestor"><code class="language-plaintext highlighter-rouge">get_ancestor</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_ancestor</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">,</span> <span class="n">root</span><span class="p">:</span> <span class="n">Root</span><span class="p">,</span> <span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Root</span><span class="p">:</span>
+    <span class="n">block</span> <span class="o">=</span> <span class="n">store</span><span class="p">.</span><span class="n">blocks</span><span class="p">[</span><span class="n">root</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">block</span><span class="p">.</span><span class="n">slot</span> <span class="o">&gt;</span> <span class="n">slot</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">get_ancestor</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">block</span><span class="p">.</span><span class="n">parent_root</span><span class="p">,</span> <span class="n">slot</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">block</span><span class="p">.</span><span class="n">slot</span> <span class="o">==</span> <span class="n">slot</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">root</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># root is older than queried slot, thus a skip slot. Return most recent root prior to slot
+</span>        <span class="k">return</span> <span class="n">root</span>
+</code></pre></div></div>
+
+<h4 id="get_latest_attesting_balance"><code class="language-plaintext highlighter-rouge">get_latest_attesting_balance</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_latest_attesting_balance</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">,</span> <span class="n">root</span><span class="p">:</span> <span class="n">Root</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Gwei</span><span class="p">:</span>
+    <span class="n">state</span> <span class="o">=</span> <span class="n">store</span><span class="p">.</span><span class="n">checkpoint_states</span><span class="p">[</span><span class="n">store</span><span class="p">.</span><span class="n">justified_checkpoint</span><span class="p">]</span>
+    <span class="n">active_indices</span> <span class="o">=</span> <span class="n">get_active_validator_indices</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">Gwei</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span>
+        <span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">effective_balance</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">active_indices</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">i</span> <span class="ow">in</span> <span class="n">store</span><span class="p">.</span><span class="n">latest_messages</span>
+            <span class="ow">and</span> <span class="n">get_ancestor</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">store</span><span class="p">.</span><span class="n">latest_messages</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">root</span><span class="p">,</span> <span class="n">store</span><span class="p">.</span><span class="n">blocks</span><span class="p">[</span><span class="n">root</span><span class="p">].</span><span class="n">slot</span><span class="p">)</span> <span class="o">==</span> <span class="n">root</span><span class="p">)</span>
+    <span class="p">))</span>
+</code></pre></div></div>
+
+<h4 id="filter_block_tree"><code class="language-plaintext highlighter-rouge">filter_block_tree</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">filter_block_tree</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">,</span> <span class="n">block_root</span><span class="p">:</span> <span class="n">Root</span><span class="p">,</span> <span class="n">blocks</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Root</span><span class="p">,</span> <span class="n">BeaconBlock</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="n">block</span> <span class="o">=</span> <span class="n">store</span><span class="p">.</span><span class="n">blocks</span><span class="p">[</span><span class="n">block_root</span><span class="p">]</span>
+    <span class="n">children</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">root</span> <span class="k">for</span> <span class="n">root</span> <span class="ow">in</span> <span class="n">store</span><span class="p">.</span><span class="n">blocks</span><span class="p">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">store</span><span class="p">.</span><span class="n">blocks</span><span class="p">[</span><span class="n">root</span><span class="p">].</span><span class="n">parent_root</span> <span class="o">==</span> <span class="n">block_root</span>
+    <span class="p">]</span>
+
+    <span class="c1"># If any children branches contain expected finalized/justified checkpoints,
+</span>    <span class="c1"># add to filtered block-tree and signal viability to parent.
+</span>    <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">children</span><span class="p">):</span>
+        <span class="n">filter_block_tree_result</span> <span class="o">=</span> <span class="p">[</span><span class="n">filter_block_tree</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">child</span><span class="p">,</span> <span class="n">blocks</span><span class="p">)</span> <span class="k">for</span> <span class="n">child</span> <span class="ow">in</span> <span class="n">children</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">filter_block_tree_result</span><span class="p">):</span>
+            <span class="n">blocks</span><span class="p">[</span><span class="n">block_root</span><span class="p">]</span> <span class="o">=</span> <span class="n">block</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="k">return</span> <span class="bp">False</span>
+
+    <span class="c1"># If leaf block, check finalized/justified checkpoints as matching latest.
+</span>    <span class="n">head_state</span> <span class="o">=</span> <span class="n">store</span><span class="p">.</span><span class="n">block_states</span><span class="p">[</span><span class="n">block_root</span><span class="p">]</span>
+
+    <span class="n">correct_justified</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">store</span><span class="p">.</span><span class="n">justified_checkpoint</span><span class="p">.</span><span class="n">epoch</span> <span class="o">==</span> <span class="n">GENESIS_EPOCH</span>
+        <span class="ow">or</span> <span class="n">head_state</span><span class="p">.</span><span class="n">current_justified_checkpoint</span> <span class="o">==</span> <span class="n">store</span><span class="p">.</span><span class="n">justified_checkpoint</span>
+    <span class="p">)</span>
+    <span class="n">correct_finalized</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">store</span><span class="p">.</span><span class="n">finalized_checkpoint</span><span class="p">.</span><span class="n">epoch</span> <span class="o">==</span> <span class="n">GENESIS_EPOCH</span>
+        <span class="ow">or</span> <span class="n">head_state</span><span class="p">.</span><span class="n">finalized_checkpoint</span> <span class="o">==</span> <span class="n">store</span><span class="p">.</span><span class="n">finalized_checkpoint</span>
+    <span class="p">)</span>
+    <span class="c1"># If expected finalized/justified, add to viable block-tree and signal viability to parent.
+</span>    <span class="k">if</span> <span class="n">correct_justified</span> <span class="ow">and</span> <span class="n">correct_finalized</span><span class="p">:</span>
+        <span class="n">blocks</span><span class="p">[</span><span class="n">block_root</span><span class="p">]</span> <span class="o">=</span> <span class="n">block</span>
+        <span class="k">return</span> <span class="bp">True</span>
+
+    <span class="c1"># Otherwise, branch not viable
+</span>    <span class="k">return</span> <span class="bp">False</span>
+</code></pre></div></div>
+
+<h4 id="get_filtered_block_tree"><code class="language-plaintext highlighter-rouge">get_filtered_block_tree</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_filtered_block_tree</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Root</span><span class="p">,</span> <span class="n">BeaconBlock</span><span class="p">]:</span>
+    <span class="s">"""
+    Retrieve a filtered block tree from ``store``, only returning branches
+    whose leaf state's justified/finalized info agrees with that in ``store``.
+    """</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="n">store</span><span class="p">.</span><span class="n">justified_checkpoint</span><span class="p">.</span><span class="n">root</span>
+    <span class="n">blocks</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Root</span><span class="p">,</span> <span class="n">BeaconBlock</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">filter_block_tree</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">base</span><span class="p">,</span> <span class="n">blocks</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">blocks</span>
+</code></pre></div></div>
+
+<h4 id="get_head"><code class="language-plaintext highlighter-rouge">get_head</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_head</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Root</span><span class="p">:</span>
+    <span class="c1"># Get filtered block tree that only includes viable branches
+</span>    <span class="n">blocks</span> <span class="o">=</span> <span class="n">get_filtered_block_tree</span><span class="p">(</span><span class="n">store</span><span class="p">)</span>
+    <span class="c1"># Execute the LMD-GHOST fork choice
+</span>    <span class="n">head</span> <span class="o">=</span> <span class="n">store</span><span class="p">.</span><span class="n">justified_checkpoint</span><span class="p">.</span><span class="n">root</span>
+    <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+        <span class="n">children</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">root</span> <span class="k">for</span> <span class="n">root</span> <span class="ow">in</span> <span class="n">blocks</span><span class="p">.</span><span class="n">keys</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">blocks</span><span class="p">[</span><span class="n">root</span><span class="p">].</span><span class="n">parent_root</span> <span class="o">==</span> <span class="n">head</span>
+        <span class="p">]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">children</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">head</span>
+        <span class="c1"># Sort by latest attesting balance with ties broken lexicographically
+</span>        <span class="n">head</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">children</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">root</span><span class="p">:</span> <span class="p">(</span><span class="n">get_latest_attesting_balance</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">root</span><span class="p">),</span> <span class="n">root</span><span class="p">))</span>
+</code></pre></div></div>
+
+<h4 id="should_update_justified_checkpoint"><code class="language-plaintext highlighter-rouge">should_update_justified_checkpoint</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">should_update_justified_checkpoint</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">,</span> <span class="n">new_justified_checkpoint</span><span class="p">:</span> <span class="n">Checkpoint</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="s">"""
+    To address the bouncing attack, only update conflicting justified
+    checkpoints in the fork choice if in the early slots of the epoch.
+    Otherwise, delay incorporation of new justified checkpoint until next epoch boundary.
+
+    See https://ethresear.ch/t/prevention-of-bouncing-attack-on-ffg/6114 for more detailed analysis and discussion.
+    """</span>
+    <span class="k">if</span> <span class="n">compute_slots_since_epoch_start</span><span class="p">(</span><span class="n">get_current_slot</span><span class="p">(</span><span class="n">store</span><span class="p">))</span> <span class="o">&lt;</span> <span class="n">SAFE_SLOTS_TO_UPDATE_JUSTIFIED</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">True</span>
+
+    <span class="n">justified_slot</span> <span class="o">=</span> <span class="n">compute_start_slot_at_epoch</span><span class="p">(</span><span class="n">store</span><span class="p">.</span><span class="n">justified_checkpoint</span><span class="p">.</span><span class="n">epoch</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">get_ancestor</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">new_justified_checkpoint</span><span class="p">.</span><span class="n">root</span><span class="p">,</span> <span class="n">justified_slot</span><span class="p">)</span> <span class="o">==</span> <span class="n">store</span><span class="p">.</span><span class="n">justified_checkpoint</span><span class="p">.</span><span class="n">root</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">False</span>
+
+    <span class="k">return</span> <span class="bp">True</span>
+</code></pre></div></div>
+
+<h4 id="on_attestation-helpers"><code class="language-plaintext highlighter-rouge">on_attestation</code> helpers</h4>
+
+<h5 id="validate_on_attestation"><code class="language-plaintext highlighter-rouge">validate_on_attestation</code></h5>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">validate_on_attestation</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">,</span> <span class="n">attestation</span><span class="p">:</span> <span class="n">Attestation</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">target</span> <span class="o">=</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">target</span>
+
+    <span class="c1"># Attestations must be from the current or previous epoch
+</span>    <span class="n">current_epoch</span> <span class="o">=</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">get_current_slot</span><span class="p">(</span><span class="n">store</span><span class="p">))</span>
+    <span class="c1"># Use GENESIS_EPOCH for previous when genesis to avoid underflow
+</span>    <span class="n">previous_epoch</span> <span class="o">=</span> <span class="n">current_epoch</span> <span class="o">-</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">current_epoch</span> <span class="o">&gt;</span> <span class="n">GENESIS_EPOCH</span> <span class="k">else</span> <span class="n">GENESIS_EPOCH</span>
+    <span class="c1"># If attestation target is from a future epoch, delay consideration until the epoch arrives
+</span>    <span class="k">assert</span> <span class="n">target</span><span class="p">.</span><span class="n">epoch</span> <span class="ow">in</span> <span class="p">[</span><span class="n">current_epoch</span><span class="p">,</span> <span class="n">previous_epoch</span><span class="p">]</span>
+    <span class="k">assert</span> <span class="n">target</span><span class="p">.</span><span class="n">epoch</span> <span class="o">==</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span>
+
+    <span class="c1"># Attestations target be for a known block. If target block is unknown, delay consideration until the block is found
+</span>    <span class="k">assert</span> <span class="n">target</span><span class="p">.</span><span class="n">root</span> <span class="ow">in</span> <span class="n">store</span><span class="p">.</span><span class="n">blocks</span>
+
+    <span class="c1"># Attestations must be for a known block. If block is unknown, delay consideration until the block is found
+</span>    <span class="k">assert</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">beacon_block_root</span> <span class="ow">in</span> <span class="n">store</span><span class="p">.</span><span class="n">blocks</span>
+    <span class="c1"># Attestations must not be for blocks in the future. If not, the attestation should not be considered
+</span>    <span class="k">assert</span> <span class="n">store</span><span class="p">.</span><span class="n">blocks</span><span class="p">[</span><span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">beacon_block_root</span><span class="p">].</span><span class="n">slot</span> <span class="o">&lt;=</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">slot</span>
+
+    <span class="c1"># LMD vote must be consistent with FFG vote target
+</span>    <span class="n">target_slot</span> <span class="o">=</span> <span class="n">compute_start_slot_at_epoch</span><span class="p">(</span><span class="n">target</span><span class="p">.</span><span class="n">epoch</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">target</span><span class="p">.</span><span class="n">root</span> <span class="o">==</span> <span class="n">get_ancestor</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">beacon_block_root</span><span class="p">,</span> <span class="n">target_slot</span><span class="p">)</span>
+
+    <span class="c1"># Attestations can only affect the fork choice of subsequent slots.
+</span>    <span class="c1"># Delay consideration in the fork choice until their slot is in the past.
+</span>    <span class="k">assert</span> <span class="n">get_current_slot</span><span class="p">(</span><span class="n">store</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">slot</span> <span class="o">+</span> <span class="mi">1</span>
+</code></pre></div></div>
+
+<h5 id="store_target_checkpoint_state"><code class="language-plaintext highlighter-rouge">store_target_checkpoint_state</code></h5>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">store_target_checkpoint_state</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="n">Checkpoint</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="c1"># Store target checkpoint state if not yet seen
+</span>    <span class="k">if</span> <span class="n">target</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">store</span><span class="p">.</span><span class="n">checkpoint_states</span><span class="p">:</span>
+        <span class="n">base_state</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="n">store</span><span class="p">.</span><span class="n">block_states</span><span class="p">[</span><span class="n">target</span><span class="p">.</span><span class="n">root</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">base_state</span><span class="p">.</span><span class="n">slot</span> <span class="o">&lt;</span> <span class="n">compute_start_slot_at_epoch</span><span class="p">(</span><span class="n">target</span><span class="p">.</span><span class="n">epoch</span><span class="p">):</span>
+            <span class="n">process_slots</span><span class="p">(</span><span class="n">base_state</span><span class="p">,</span> <span class="n">compute_start_slot_at_epoch</span><span class="p">(</span><span class="n">target</span><span class="p">.</span><span class="n">epoch</span><span class="p">))</span>
+        <span class="n">store</span><span class="p">.</span><span class="n">checkpoint_states</span><span class="p">[</span><span class="n">target</span><span class="p">]</span> <span class="o">=</span> <span class="n">base_state</span>
+</code></pre></div></div>
+
+<h5 id="update_latest_messages"><code class="language-plaintext highlighter-rouge">update_latest_messages</code></h5>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">update_latest_messages</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">,</span> <span class="n">attesting_indices</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">ValidatorIndex</span><span class="p">],</span> <span class="n">attestation</span><span class="p">:</span> <span class="n">Attestation</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">target</span> <span class="o">=</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">target</span>
+    <span class="n">beacon_block_root</span> <span class="o">=</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">beacon_block_root</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">attesting_indices</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">i</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">store</span><span class="p">.</span><span class="n">latest_messages</span> <span class="ow">or</span> <span class="n">target</span><span class="p">.</span><span class="n">epoch</span> <span class="o">&gt;</span> <span class="n">store</span><span class="p">.</span><span class="n">latest_messages</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">epoch</span><span class="p">:</span>
+            <span class="n">store</span><span class="p">.</span><span class="n">latest_messages</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">LatestMessage</span><span class="p">(</span><span class="n">epoch</span><span class="o">=</span><span class="n">target</span><span class="p">.</span><span class="n">epoch</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="n">beacon_block_root</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="handlers">Handlers</h3>
+
+<h4 id="on_tick"><code class="language-plaintext highlighter-rouge">on_tick</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">on_tick</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">,</span> <span class="n">time</span><span class="p">:</span> <span class="n">uint64</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">previous_slot</span> <span class="o">=</span> <span class="n">get_current_slot</span><span class="p">(</span><span class="n">store</span><span class="p">)</span>
+
+    <span class="c1"># update store time
+</span>    <span class="n">store</span><span class="p">.</span><span class="n">time</span> <span class="o">=</span> <span class="n">time</span>
+
+    <span class="n">current_slot</span> <span class="o">=</span> <span class="n">get_current_slot</span><span class="p">(</span><span class="n">store</span><span class="p">)</span>
+    <span class="c1"># Not a new epoch, return
+</span>    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">current_slot</span> <span class="o">&gt;</span> <span class="n">previous_slot</span> <span class="ow">and</span> <span class="n">compute_slots_since_epoch_start</span><span class="p">(</span><span class="n">current_slot</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">):</span>
+        <span class="k">return</span>
+    <span class="c1"># Update store.justified_checkpoint if a better checkpoint is known
+</span>    <span class="k">if</span> <span class="n">store</span><span class="p">.</span><span class="n">best_justified_checkpoint</span><span class="p">.</span><span class="n">epoch</span> <span class="o">&gt;</span> <span class="n">store</span><span class="p">.</span><span class="n">justified_checkpoint</span><span class="p">.</span><span class="n">epoch</span><span class="p">:</span>
+        <span class="n">store</span><span class="p">.</span><span class="n">justified_checkpoint</span> <span class="o">=</span> <span class="n">store</span><span class="p">.</span><span class="n">best_justified_checkpoint</span>
+</code></pre></div></div>
+
+<h4 id="on_block"><code class="language-plaintext highlighter-rouge">on_block</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">on_block</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">,</span> <span class="n">signed_block</span><span class="p">:</span> <span class="n">SignedBeaconBlock</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">block</span> <span class="o">=</span> <span class="n">signed_block</span><span class="p">.</span><span class="n">message</span>
+    <span class="c1"># Parent block must be known
+</span>    <span class="k">assert</span> <span class="n">block</span><span class="p">.</span><span class="n">parent_root</span> <span class="ow">in</span> <span class="n">store</span><span class="p">.</span><span class="n">block_states</span>
+    <span class="c1"># Make a copy of the state to avoid mutability issues
+</span>    <span class="n">pre_state</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="n">store</span><span class="p">.</span><span class="n">block_states</span><span class="p">[</span><span class="n">block</span><span class="p">.</span><span class="n">parent_root</span><span class="p">])</span>
+    <span class="c1"># Blocks cannot be in the future. If they are, their consideration must be delayed until the are in the past.
+</span>    <span class="k">assert</span> <span class="n">get_current_slot</span><span class="p">(</span><span class="n">store</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">block</span><span class="p">.</span><span class="n">slot</span>
+
+    <span class="c1"># Check that block is later than the finalized epoch slot (optimization to reduce calls to get_ancestor)
+</span>    <span class="n">finalized_slot</span> <span class="o">=</span> <span class="n">compute_start_slot_at_epoch</span><span class="p">(</span><span class="n">store</span><span class="p">.</span><span class="n">finalized_checkpoint</span><span class="p">.</span><span class="n">epoch</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">block</span><span class="p">.</span><span class="n">slot</span> <span class="o">&gt;</span> <span class="n">finalized_slot</span>
+    <span class="c1"># Check block is a descendant of the finalized block at the checkpoint finalized slot
+</span>    <span class="k">assert</span> <span class="n">get_ancestor</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">block</span><span class="p">.</span><span class="n">parent_root</span><span class="p">,</span> <span class="n">finalized_slot</span><span class="p">)</span> <span class="o">==</span> <span class="n">store</span><span class="p">.</span><span class="n">finalized_checkpoint</span><span class="p">.</span><span class="n">root</span>
+
+    <span class="c1"># Check the block is valid and compute the post-state
+</span>    <span class="n">state</span> <span class="o">=</span> <span class="n">pre_state</span><span class="p">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">state_transition</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">signed_block</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+    <span class="c1"># Add new block to the store
+</span>    <span class="n">store</span><span class="p">.</span><span class="n">blocks</span><span class="p">[</span><span class="n">hash_tree_root</span><span class="p">(</span><span class="n">block</span><span class="p">)]</span> <span class="o">=</span> <span class="n">block</span>
+    <span class="c1"># Add new state for this block to the store
+</span>    <span class="n">store</span><span class="p">.</span><span class="n">block_states</span><span class="p">[</span><span class="n">hash_tree_root</span><span class="p">(</span><span class="n">block</span><span class="p">)]</span> <span class="o">=</span> <span class="n">state</span>
+
+    <span class="c1"># Update justified checkpoint
+</span>    <span class="k">if</span> <span class="n">state</span><span class="p">.</span><span class="n">current_justified_checkpoint</span><span class="p">.</span><span class="n">epoch</span> <span class="o">&gt;</span> <span class="n">store</span><span class="p">.</span><span class="n">justified_checkpoint</span><span class="p">.</span><span class="n">epoch</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">state</span><span class="p">.</span><span class="n">current_justified_checkpoint</span><span class="p">.</span><span class="n">epoch</span> <span class="o">&gt;</span> <span class="n">store</span><span class="p">.</span><span class="n">best_justified_checkpoint</span><span class="p">.</span><span class="n">epoch</span><span class="p">:</span>
+            <span class="n">store</span><span class="p">.</span><span class="n">best_justified_checkpoint</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">current_justified_checkpoint</span>
+        <span class="k">if</span> <span class="n">should_update_justified_checkpoint</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">state</span><span class="p">.</span><span class="n">current_justified_checkpoint</span><span class="p">):</span>
+            <span class="n">store</span><span class="p">.</span><span class="n">justified_checkpoint</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">current_justified_checkpoint</span>
+
+    <span class="c1"># Update finalized checkpoint
+</span>    <span class="k">if</span> <span class="n">state</span><span class="p">.</span><span class="n">finalized_checkpoint</span><span class="p">.</span><span class="n">epoch</span> <span class="o">&gt;</span> <span class="n">store</span><span class="p">.</span><span class="n">finalized_checkpoint</span><span class="p">.</span><span class="n">epoch</span><span class="p">:</span>
+        <span class="n">store</span><span class="p">.</span><span class="n">finalized_checkpoint</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">finalized_checkpoint</span>
+
+        <span class="c1"># Potentially update justified if different from store
+</span>        <span class="k">if</span> <span class="n">store</span><span class="p">.</span><span class="n">justified_checkpoint</span> <span class="o">!=</span> <span class="n">state</span><span class="p">.</span><span class="n">current_justified_checkpoint</span><span class="p">:</span>
+            <span class="c1"># Update justified if new justified is later than store justified
+</span>            <span class="k">if</span> <span class="n">state</span><span class="p">.</span><span class="n">current_justified_checkpoint</span><span class="p">.</span><span class="n">epoch</span> <span class="o">&gt;</span> <span class="n">store</span><span class="p">.</span><span class="n">justified_checkpoint</span><span class="p">.</span><span class="n">epoch</span><span class="p">:</span>
+                <span class="n">store</span><span class="p">.</span><span class="n">justified_checkpoint</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">current_justified_checkpoint</span>
+                <span class="k">return</span>
+
+            <span class="c1"># Update justified if store justified is not in chain with finalized checkpoint
+</span>            <span class="n">finalized_slot</span> <span class="o">=</span> <span class="n">compute_start_slot_at_epoch</span><span class="p">(</span><span class="n">store</span><span class="p">.</span><span class="n">finalized_checkpoint</span><span class="p">.</span><span class="n">epoch</span><span class="p">)</span>
+            <span class="n">ancestor_at_finalized_slot</span> <span class="o">=</span> <span class="n">get_ancestor</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">store</span><span class="p">.</span><span class="n">justified_checkpoint</span><span class="p">.</span><span class="n">root</span><span class="p">,</span> <span class="n">finalized_slot</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">ancestor_at_finalized_slot</span> <span class="o">!=</span> <span class="n">store</span><span class="p">.</span><span class="n">finalized_checkpoint</span><span class="p">.</span><span class="n">root</span><span class="p">:</span>
+                <span class="n">store</span><span class="p">.</span><span class="n">justified_checkpoint</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">current_justified_checkpoint</span>
+</code></pre></div></div>
+
+<h4 id="on_attestation"><code class="language-plaintext highlighter-rouge">on_attestation</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">on_attestation</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">,</span> <span class="n">attestation</span><span class="p">:</span> <span class="n">Attestation</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="s">"""
+    Run ``on_attestation`` upon receiving a new ``attestation`` from either within a block or directly on the wire.
+
+    An ``attestation`` that is asserted as invalid may be valid at a later time,
+    consider scheduling it for later processing in such case.
+    """</span>
+    <span class="n">validate_on_attestation</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">attestation</span><span class="p">)</span>
+    <span class="n">store_target_checkpoint_state</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">target</span><span class="p">)</span>
+
+    <span class="c1"># Get state at the `target` to fully validate attestation
+</span>    <span class="n">target_state</span> <span class="o">=</span> <span class="n">store</span><span class="p">.</span><span class="n">checkpoint_states</span><span class="p">[</span><span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">target</span><span class="p">]</span>
+    <span class="n">indexed_attestation</span> <span class="o">=</span> <span class="n">get_indexed_attestation</span><span class="p">(</span><span class="n">target_state</span><span class="p">,</span> <span class="n">attestation</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">is_valid_indexed_attestation</span><span class="p">(</span><span class="n">target_state</span><span class="p">,</span> <span class="n">indexed_attestation</span><span class="p">)</span>
+
+    <span class="c1"># Update latest messages for attesting indices
+</span>    <span class="n">update_latest_messages</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">indexed_attestation</span><span class="p">.</span><span class="n">attesting_indices</span><span class="p">,</span> <span class="n">attestation</span><span class="p">)</span>
+</code></pre></div></div>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

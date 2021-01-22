@@ -1,0 +1,42 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="test-format-bls-signature-aggregation">Test format: BLS signature aggregation</h1>
+
+<p>A BLS signature aggregation combines a series of signatures into a single signature.</p>
+
+<h2 id="test-case-format">Test case format</h2>
+
+<p>The test data is declared in a <code class="language-plaintext highlighter-rouge">data.yaml</code> file:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">input</span><span class="pi">:</span> <span class="s">List[BLS Signature] -- list of input BLS signatures</span>
+<span class="na">output</span><span class="pi">:</span> <span class="s">BLS Signature -- expected output, single BLS signature or empty.</span>
+</code></pre></div></div>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">BLS Signature</code> here is encoded as a string: hexadecimal encoding of 96 bytes (192 nibbles), prefixed with <code class="language-plaintext highlighter-rouge">0x</code>.</li>
+  <li>No output value if the input is invalid.</li>
+</ul>
+
+<h2 id="condition">Condition</h2>
+
+<p>The <code class="language-plaintext highlighter-rouge">aggregate</code> handler should aggregate the signatures in the <code class="language-plaintext highlighter-rouge">input</code>, and the result should match the expected <code class="language-plaintext highlighter-rouge">output</code>.</p>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

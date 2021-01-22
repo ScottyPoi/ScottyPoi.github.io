@@ -1,0 +1,57 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="configs">Configs</h1>
+
+<p>This directory contains a set of constants presets used for testing, testnets, and mainnet.</p>
+
+<p>A preset file contains all the constants known for its target.
+Later-fork constants can be ignored, e.g. ignore Phase 1 constants as a client that only supports Phase 0 currently.</p>
+
+<h2 id="forking">Forking</h2>
+
+<p>Configs are not replaced, but extended with forks. This is to support syncing from one state to the other over a fork boundary, without hot-swapping a config.
+Instead, for forks that introduce changes in a constant, the constant name is prefixed with a short abbreviation of the fork.</p>
+
+<p>Over time, the need to sync an older state may be deprecated.
+In this case, the prefix on the new constant may be removed, and the old constant will keep a special name before completely being removed.</p>
+
+<p>A previous iteration of forking made use of “timelines”, but this collides with the definitions used in the spec (constants for special forking slots, etc.), and was not integrated sufficiently in any of the spec tools or implementations.
+Instead, the config essentially doubles as fork definition now, e.g. changing the value for <code class="language-plaintext highlighter-rouge">PHASE_1_FORK_SLOT</code> changes the fork.</p>
+
+<p>Another reason to prefer forking through constants is the ability to program a forking moment based on context, instead of being limited to a static slot number.</p>
+
+<h2 id="format">Format</h2>
+
+<p>Each preset is a key-value mapping.</p>
+
+<p><strong>Key</strong>: an <code class="language-plaintext highlighter-rouge">UPPER_SNAKE_CASE</code> (a.k.a. “macro case”) formatted string, name of the constant.</p>
+
+<p><strong>Value</strong> can be either:</p>
+<ul>
+  <li>an unsigned integer number, can be up to 64 bits (incl.)</li>
+  <li>a hexadecimal string, prefixed with <code class="language-plaintext highlighter-rouge">0x</code></li>
+</ul>
+
+<p>Presets may contain comments to describe the values.</p>
+
+<p>See <a href="./mainnet_phase0.yaml"><code class="language-plaintext highlighter-rouge">mainnet_phase0.yaml</code></a> for a complete example.</p>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

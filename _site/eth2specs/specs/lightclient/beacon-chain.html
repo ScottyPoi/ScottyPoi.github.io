@@ -1,0 +1,353 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="ethereum-20-light-client-support">Ethereum 2.0 Light Client Support</h1>
+
+<h2 id="table-of-contents">Table of contents</h2>
+
+<!-- TOC -->
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+<ul>
+  <li><a href="#introduction">Introduction</a></li>
+  <li><a href="#constants">Constants</a></li>
+  <li><a href="#configuration">Configuration</a>
+    <ul>
+      <li><a href="#constants-1">Constants</a></li>
+      <li><a href="#misc">Misc</a></li>
+      <li><a href="#time-parameters">Time parameters</a></li>
+      <li><a href="#domain-types">Domain types</a></li>
+    </ul>
+  </li>
+  <li><a href="#containers">Containers</a>
+    <ul>
+      <li><a href="#extended-containers">Extended containers</a>
+        <ul>
+          <li><a href="#beaconblockbody"><code class="language-plaintext highlighter-rouge">BeaconBlockBody</code></a></li>
+          <li><a href="#beaconstate"><code class="language-plaintext highlighter-rouge">BeaconState</code></a></li>
+        </ul>
+      </li>
+      <li><a href="#new-containers">New containers</a>
+        <ul>
+          <li><a href="#synccommittee"><code class="language-plaintext highlighter-rouge">SyncCommittee</code></a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li><a href="#helper-functions">Helper functions</a>
+    <ul>
+      <li><a href="#predicates"><code class="language-plaintext highlighter-rouge">Predicates</code></a>
+        <ul>
+          <li><a href="#eth2_fast_aggregate_verify"><code class="language-plaintext highlighter-rouge">eth2_fast_aggregate_verify</code></a></li>
+        </ul>
+      </li>
+      <li><a href="#beacon-state-accessors">Beacon state accessors</a>
+        <ul>
+          <li><a href="#get_sync_committee_indices"><code class="language-plaintext highlighter-rouge">get_sync_committee_indices</code></a></li>
+          <li><a href="#get_sync_committee"><code class="language-plaintext highlighter-rouge">get_sync_committee</code></a></li>
+        </ul>
+      </li>
+      <li><a href="#block-processing">Block processing</a>
+        <ul>
+          <li><a href="#sync-committee-processing">Sync committee processing</a></li>
+        </ul>
+      </li>
+      <li><a href="#epoch-processing">Epoch processing</a>
+        <ul>
+          <li><a href="#components-of-attestation-deltas">Components of attestation deltas</a></li>
+          <li><a href="#final-updates">Final updates</a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+<!-- /TOC -->
+
+<h2 id="introduction">Introduction</h2>
+
+<p>This is a standalone beacon chain patch adding light client support via sync committees.</p>
+
+<h2 id="constants">Constants</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">BASE_REWARDS_PER_EPOCH</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(5)</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="configuration">Configuration</h2>
+
+<h3 id="constants-1">Constants</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">G2_POINT_AT_INFINITY</code></td>
+      <td><code class="language-plaintext highlighter-rouge">BLSSignature(b'\xc0' + b'\x00' * 95)</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="misc">Misc</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SYNC_COMMITTEE_SIZE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**10)</code> (= 1024)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SYNC_COMMITTEE_PUBKEY_AGGREGATES_SIZE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**6)</code> (= 64)</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="time-parameters">Time parameters</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+      <th style="text-align: center">Unit</th>
+      <th style="text-align: center">Duration</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">EPOCHS_PER_SYNC_COMMITTEE_PERIOD</code></td>
+      <td><code class="language-plaintext highlighter-rouge">Epoch(2**8)</code> (= 256)</td>
+      <td style="text-align: center">epochs</td>
+      <td style="text-align: center">~27 hours</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="domain-types">Domain types</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DOMAIN_SYNC_COMMITTEE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">DomainType('0x07000000')</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="containers">Containers</h2>
+
+<h3 id="extended-containers">Extended containers</h3>
+
+<p><em>Note</em>: Extended SSZ containers inherit all fields from the parent in the original
+order and append any additional fields to the end.</p>
+
+<h4 id="beaconblockbody"><code class="language-plaintext highlighter-rouge">BeaconBlockBody</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">BeaconBlockBody</span><span class="p">(</span><span class="n">phase0</span><span class="p">.</span><span class="n">BeaconBlockBody</span><span class="p">):</span>
+    <span class="c1"># Sync committee aggregate signature
+</span>    <span class="n">sync_committee_bits</span><span class="p">:</span> <span class="n">Bitvector</span><span class="p">[</span><span class="n">SYNC_COMMITTEE_SIZE</span><span class="p">]</span>
+    <span class="n">sync_committee_signature</span><span class="p">:</span> <span class="n">BLSSignature</span>
+</code></pre></div></div>
+
+<h4 id="beaconstate"><code class="language-plaintext highlighter-rouge">BeaconState</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">BeaconState</span><span class="p">(</span><span class="n">phase0</span><span class="p">.</span><span class="n">BeaconState</span><span class="p">):</span>
+    <span class="c1"># Sync committees
+</span>    <span class="n">current_sync_committee</span><span class="p">:</span> <span class="n">SyncCommittee</span>
+    <span class="n">next_sync_committee</span><span class="p">:</span> <span class="n">SyncCommittee</span>
+</code></pre></div></div>
+
+<h3 id="new-containers">New containers</h3>
+
+<h4 id="synccommittee"><code class="language-plaintext highlighter-rouge">SyncCommittee</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">SyncCommittee</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">pubkeys</span><span class="p">:</span> <span class="n">Vector</span><span class="p">[</span><span class="n">BLSPubkey</span><span class="p">,</span> <span class="n">SYNC_COMMITTEE_SIZE</span><span class="p">]</span>
+    <span class="n">pubkey_aggregates</span><span class="p">:</span> <span class="n">Vector</span><span class="p">[</span><span class="n">BLSPubkey</span><span class="p">,</span> <span class="n">SYNC_COMMITTEE_SIZE</span> <span class="o">//</span> <span class="n">SYNC_COMMITTEE_PUBKEY_AGGREGATES_SIZE</span><span class="p">]</span>
+</code></pre></div></div>
+
+<h2 id="helper-functions">Helper functions</h2>
+
+<h3 id="predicates"><code class="language-plaintext highlighter-rouge">Predicates</code></h3>
+
+<h4 id="eth2_fast_aggregate_verify"><code class="language-plaintext highlighter-rouge">eth2_fast_aggregate_verify</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">eth2_fast_aggregate_verify</span><span class="p">(</span><span class="n">pubkeys</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">BLSPubkey</span><span class="p">],</span> <span class="n">message</span><span class="p">:</span> <span class="n">Bytes32</span><span class="p">,</span> <span class="n">signature</span><span class="p">:</span> <span class="n">BLSSignature</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="s">"""
+    Wrapper to ``bls.FastAggregateVerify`` accepting the ``G2_POINT_AT_INFINITY`` signature when ``pubkeys`` is empty.
+    """</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">pubkeys</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">signature</span> <span class="o">==</span> <span class="n">G2_POINT_AT_INFINITY</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">True</span>
+    <span class="k">return</span> <span class="n">bls</span><span class="p">.</span><span class="n">FastAggregateVerify</span><span class="p">(</span><span class="n">pubkeys</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">signature</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="beacon-state-accessors">Beacon state accessors</h3>
+
+<h4 id="get_sync_committee_indices"><code class="language-plaintext highlighter-rouge">get_sync_committee_indices</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_sync_committee_indices</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">epoch</span><span class="p">:</span> <span class="n">Epoch</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">ValidatorIndex</span><span class="p">]:</span>
+    <span class="s">"""
+    Return the sync committee indices for a given state and epoch.
+    """</span> 
+    <span class="n">MAX_RANDOM_BYTE</span> <span class="o">=</span> <span class="mi">2</span><span class="o">**</span><span class="mi">8</span> <span class="o">-</span> <span class="mi">1</span>
+    <span class="n">base_epoch</span> <span class="o">=</span> <span class="n">Epoch</span><span class="p">((</span><span class="nb">max</span><span class="p">(</span><span class="n">epoch</span> <span class="o">//</span> <span class="n">EPOCHS_PER_SYNC_COMMITTEE_PERIOD</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">EPOCHS_PER_SYNC_COMMITTEE_PERIOD</span><span class="p">)</span>
+    <span class="n">active_validator_indices</span> <span class="o">=</span> <span class="n">get_active_validator_indices</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">base_epoch</span><span class="p">)</span>
+    <span class="n">active_validator_count</span> <span class="o">=</span> <span class="n">uint64</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">active_validator_indices</span><span class="p">))</span>
+    <span class="n">seed</span> <span class="o">=</span> <span class="n">get_seed</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">base_epoch</span><span class="p">,</span> <span class="n">DOMAIN_SYNC_COMMITTEE</span><span class="p">)</span>
+    <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">sync_committee_indices</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">ValidatorIndex</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">while</span> <span class="nb">len</span><span class="p">(</span><span class="n">sync_committee_indices</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">SYNC_COMMITTEE_SIZE</span><span class="p">:</span>
+        <span class="n">shuffled_index</span> <span class="o">=</span> <span class="n">compute_shuffled_index</span><span class="p">(</span><span class="n">uint64</span><span class="p">(</span><span class="n">i</span> <span class="o">%</span> <span class="n">active_validator_count</span><span class="p">),</span> <span class="n">active_validator_count</span><span class="p">,</span> <span class="n">seed</span><span class="p">)</span>
+        <span class="n">candidate_index</span> <span class="o">=</span> <span class="n">active_validator_indices</span><span class="p">[</span><span class="n">shuffled_index</span><span class="p">]</span>
+        <span class="n">random_byte</span> <span class="o">=</span> <span class="nb">hash</span><span class="p">(</span><span class="n">seed</span> <span class="o">+</span> <span class="n">uint_to_bytes</span><span class="p">(</span><span class="n">uint64</span><span class="p">(</span><span class="n">i</span> <span class="o">//</span> <span class="mi">32</span><span class="p">)))[</span><span class="n">i</span> <span class="o">%</span> <span class="mi">32</span><span class="p">]</span>
+        <span class="n">effective_balance</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">[</span><span class="n">candidate_index</span><span class="p">].</span><span class="n">effective_balance</span>
+        <span class="k">if</span> <span class="n">effective_balance</span> <span class="o">*</span> <span class="n">MAX_RANDOM_BYTE</span> <span class="o">&gt;=</span> <span class="n">MAX_EFFECTIVE_BALANCE</span> <span class="o">*</span> <span class="n">random_byte</span><span class="p">:</span>
+            <span class="n">sync_committee_indices</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">candidate_index</span><span class="p">)</span>
+        <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="k">return</span> <span class="n">sync_committee_indices</span>
+</code></pre></div></div>
+
+<h4 id="get_sync_committee"><code class="language-plaintext highlighter-rouge">get_sync_committee</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_sync_committee</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">epoch</span><span class="p">:</span> <span class="n">Epoch</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SyncCommittee</span><span class="p">:</span>
+    <span class="s">"""
+    Return the sync committee for a given state and epoch.
+    """</span>
+    <span class="n">indices</span> <span class="o">=</span> <span class="n">get_sync_committee_indices</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">epoch</span><span class="p">)</span>
+    <span class="n">validators</span> <span class="o">=</span> <span class="p">[</span><span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">indices</span><span class="p">]</span>
+    <span class="n">pubkeys</span> <span class="o">=</span> <span class="p">[</span><span class="n">validator</span><span class="p">.</span><span class="n">pubkey</span> <span class="k">for</span> <span class="n">validator</span> <span class="ow">in</span> <span class="n">validators</span><span class="p">]</span>
+    <span class="n">aggregates</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">bls</span><span class="p">.</span><span class="n">AggregatePKs</span><span class="p">(</span><span class="n">pubkeys</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span> <span class="o">+</span> <span class="n">SYNC_COMMITTEE_PUBKEY_AGGREGATES_SIZE</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">pubkeys</span><span class="p">),</span> <span class="n">SYNC_COMMITTEE_PUBKEY_AGGREGATES_SIZE</span><span class="p">)</span>
+    <span class="p">]</span>
+    <span class="k">return</span> <span class="n">SyncCommittee</span><span class="p">(</span><span class="n">pubkeys</span><span class="o">=</span><span class="n">pubkeys</span><span class="p">,</span> <span class="n">pubkey_aggregates</span><span class="o">=</span><span class="n">aggregates</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="block-processing">Block processing</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_block</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">block</span><span class="p">:</span> <span class="n">BeaconBlock</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">process_block_header</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">block</span><span class="p">)</span>
+    <span class="n">process_randao</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">block</span><span class="p">.</span><span class="n">body</span><span class="p">)</span>
+    <span class="n">process_eth1_data</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">block</span><span class="p">.</span><span class="n">body</span><span class="p">)</span>
+    <span class="n">process_operations</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">block</span><span class="p">.</span><span class="n">body</span><span class="p">)</span>
+    <span class="c1"># Light client support
+</span>    <span class="n">process_sync_committee</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">block</span><span class="p">.</span><span class="n">body</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="sync-committee-processing">Sync committee processing</h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_sync_committee</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">body</span><span class="p">:</span> <span class="n">BeaconBlockBody</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="c1"># Verify sync committee aggregate signature signing over the previous slot block root
+</span>    <span class="n">previous_slot</span> <span class="o">=</span> <span class="n">Slot</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">slot</span><span class="p">),</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">committee_indices</span> <span class="o">=</span> <span class="n">get_sync_committee_indices</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+    <span class="n">participant_indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">index</span> <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">bit</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">committee_indices</span><span class="p">,</span> <span class="n">body</span><span class="p">.</span><span class="n">sync_committee_bits</span><span class="p">)</span> <span class="k">if</span> <span class="n">bit</span><span class="p">]</span>
+    <span class="n">committee_pubkeys</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">current_sync_committee</span><span class="p">.</span><span class="n">pubkeys</span>
+    <span class="n">participant_pubkeys</span> <span class="o">=</span> <span class="p">[</span><span class="n">pubkey</span> <span class="k">for</span> <span class="n">pubkey</span><span class="p">,</span> <span class="n">bit</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">committee_pubkeys</span><span class="p">,</span> <span class="n">body</span><span class="p">.</span><span class="n">sync_committee_bits</span><span class="p">)</span> <span class="k">if</span> <span class="n">bit</span><span class="p">]</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">DOMAIN_SYNC_COMMITTEE</span><span class="p">,</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">previous_slot</span><span class="p">))</span>
+    <span class="n">signing_root</span> <span class="o">=</span> <span class="n">compute_signing_root</span><span class="p">(</span><span class="n">get_block_root_at_slot</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">previous_slot</span><span class="p">),</span> <span class="n">domain</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">eth2_fast_aggregate_verify</span><span class="p">(</span><span class="n">participant_pubkeys</span><span class="p">,</span> <span class="n">signing_root</span><span class="p">,</span> <span class="n">body</span><span class="p">.</span><span class="n">sync_committee_signature</span><span class="p">)</span>
+
+    <span class="c1"># Reward sync committee participants
+</span>    <span class="n">total_proposer_reward</span> <span class="o">=</span> <span class="n">Gwei</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">active_validator_count</span> <span class="o">=</span> <span class="n">uint64</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">get_active_validator_indices</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">))))</span>
+    <span class="k">for</span> <span class="n">participant_index</span> <span class="ow">in</span> <span class="n">participant_indices</span><span class="p">:</span>
+        <span class="n">base_reward</span> <span class="o">=</span> <span class="n">get_base_reward</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">participant_index</span><span class="p">)</span>
+        <span class="n">proposer_reward</span> <span class="o">=</span> <span class="n">get_proposer_reward</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">participant_index</span><span class="p">)</span>
+        <span class="n">max_participant_reward</span> <span class="o">=</span> <span class="n">base_reward</span> <span class="o">-</span> <span class="n">proposer_reward</span>
+        <span class="n">reward</span> <span class="o">=</span> <span class="n">Gwei</span><span class="p">(</span><span class="n">max_participant_reward</span> <span class="o">*</span> <span class="n">active_validator_count</span> <span class="o">//</span> <span class="nb">len</span><span class="p">(</span><span class="n">committee_indices</span><span class="p">)</span> <span class="o">//</span> <span class="n">SLOTS_PER_EPOCH</span><span class="p">)</span>
+        <span class="n">increase_balance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">participant_index</span><span class="p">,</span> <span class="n">reward</span><span class="p">)</span>
+        <span class="n">total_proposer_reward</span> <span class="o">+=</span> <span class="n">proposer_reward</span>
+
+    <span class="c1"># Reward beacon proposer
+</span>    <span class="n">increase_balance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">get_beacon_proposer_index</span><span class="p">(</span><span class="n">state</span><span class="p">),</span> <span class="n">total_proposer_reward</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="epoch-processing">Epoch processing</h3>
+
+<h4 id="components-of-attestation-deltas">Components of attestation deltas</h4>
+
+<p><em>Note</em>: The function <code class="language-plaintext highlighter-rouge">get_inactivity_penalty_deltas</code> is modified with <code class="language-plaintext highlighter-rouge">BASE_REWARDS_PER_EPOCH</code> replaced by <code class="language-plaintext highlighter-rouge">BASE_REWARDS_PER_EPOCH - 1</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_inactivity_penalty_deltas</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="n">Gwei</span><span class="p">],</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Gwei</span><span class="p">]]:</span>
+    <span class="s">"""
+    Return inactivity reward/penalty deltas for each validator.
+    """</span>
+    <span class="n">penalties</span> <span class="o">=</span> <span class="p">[</span><span class="n">Gwei</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">))]</span>
+    <span class="k">if</span> <span class="n">is_in_inactivity_leak</span><span class="p">(</span><span class="n">state</span><span class="p">):</span>
+        <span class="n">matching_target_attestations</span> <span class="o">=</span> <span class="n">get_matching_target_attestations</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">get_previous_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+        <span class="n">matching_target_attesting_indices</span> <span class="o">=</span> <span class="n">get_unslashed_attesting_indices</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">matching_target_attestations</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">get_eligible_validator_indices</span><span class="p">(</span><span class="n">state</span><span class="p">):</span>
+            <span class="c1"># Penalize validator so that optimal attestation performance is rewarded with one base reward per epoch
+</span>            <span class="n">base_reward</span> <span class="o">=</span> <span class="n">get_base_reward</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">index</span><span class="p">)</span>
+            <span class="n">penalties</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">+=</span> <span class="n">Gwei</span><span class="p">((</span><span class="n">BASE_REWARDS_PER_EPOCH</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">base_reward</span> <span class="o">-</span> <span class="n">get_proposer_reward</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">index</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">index</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">matching_target_attesting_indices</span><span class="p">:</span>
+                <span class="n">effective_balance</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">[</span><span class="n">index</span><span class="p">].</span><span class="n">effective_balance</span>
+                <span class="n">penalties</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">+=</span> <span class="n">Gwei</span><span class="p">(</span><span class="n">effective_balance</span> <span class="o">*</span> <span class="n">get_finality_delay</span><span class="p">(</span><span class="n">state</span><span class="p">)</span> <span class="o">//</span> <span class="n">INACTIVITY_PENALTY_QUOTIENT</span><span class="p">)</span>
+
+    <span class="c1"># No rewards associated with inactivity penalties
+</span>    <span class="n">rewards</span> <span class="o">=</span> <span class="p">[</span><span class="n">Gwei</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">))]</span>
+    <span class="k">return</span> <span class="n">rewards</span><span class="p">,</span> <span class="n">penalties</span>
+</code></pre></div></div>
+
+<h4 id="final-updates">Final updates</h4>
+
+<p><em>Note</em>: The function <code class="language-plaintext highlighter-rouge">process_final_updates</code> is modified to handle sync committee updates.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_final_updates</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="c1"># FIXME: unfold the full `process_final_updates` to avoid side effects.
+</span>    <span class="n">phase0</span><span class="p">.</span><span class="n">process_final_updates</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="n">next_epoch</span> <span class="o">=</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">)</span> <span class="o">+</span> <span class="n">Epoch</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">next_epoch</span> <span class="o">%</span> <span class="n">EPOCHS_PER_SYNC_COMMITTEE_PERIOD</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">state</span><span class="p">.</span><span class="n">current_sync_committee</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">next_sync_committee</span>
+        <span class="n">state</span><span class="p">.</span><span class="n">next_sync_committee</span> <span class="o">=</span> <span class="n">get_sync_committee</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">next_epoch</span> <span class="o">+</span> <span class="n">EPOCHS_PER_SYNC_COMMITTEE_PERIOD</span><span class="p">)</span>
+</code></pre></div></div>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

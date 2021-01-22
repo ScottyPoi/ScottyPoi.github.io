@@ -1,0 +1,136 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="ethereum-20-phase-0--deposit-contract">Ethereum 2.0 Phase 0 – Deposit Contract</h1>
+
+<h2 id="table-of-contents">Table of contents</h2>
+<!-- TOC -->
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+<ul>
+  <li><a href="#introduction">Introduction</a></li>
+  <li><a href="#constants">Constants</a></li>
+  <li><a href="#configuration">Configuration</a></li>
+  <li><a href="#ethereum-10-deposit-contract">Ethereum 1.0 deposit contract</a>
+    <ul>
+      <li><a href="#deposit-function"><code class="language-plaintext highlighter-rouge">deposit</code> function</a>
+        <ul>
+          <li><a href="#deposit-amount">Deposit amount</a></li>
+          <li><a href="#withdrawal-credentials">Withdrawal credentials</a></li>
+          <li><a href="#depositevent-log"><code class="language-plaintext highlighter-rouge">DepositEvent</code> log</a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li><a href="#solidity-code">Solidity code</a></li>
+</ul>
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+<!-- /TOC -->
+
+<h2 id="introduction">Introduction</h2>
+
+<p>This document represents the specification for the beacon chain deposit contract, part of Ethereum 2.0 Phase 0.</p>
+
+<h2 id="constants">Constants</h2>
+
+<p>The following values are (non-configurable) constants used throughout the specification.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DEPOSIT_CONTRACT_TREE_DEPTH</code></td>
+      <td><code class="language-plaintext highlighter-rouge">2**5</code> (= 32)</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="configuration">Configuration</h2>
+
+<p><em>Note</em>: The default mainnet configuration values are included here for spec-design purposes.
+The different configurations for mainnet, testnets, and YAML-based testing can be found in the <a href="../../configs"><code class="language-plaintext highlighter-rouge">configs/constant_presets</code></a> directory.
+These configurations are updated for releases and may be out of sync during <code class="language-plaintext highlighter-rouge">dev</code> changes.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DEPOSIT_CHAIN_ID</code></td>
+      <td><code class="language-plaintext highlighter-rouge">1</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DEPOSIT_NETWORK_ID</code></td>
+      <td><code class="language-plaintext highlighter-rouge">1</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DEPOSIT_CONTRACT_ADDRESS</code></td>
+      <td><code class="language-plaintext highlighter-rouge">0x00000000219ab540356cBB839Cbe05303d7705Fa</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="ethereum-10-deposit-contract">Ethereum 1.0 deposit contract</h2>
+
+<p>The initial deployment phases of Ethereum 2.0 are implemented without consensus changes to Ethereum 1.0. A deposit contract at address <code class="language-plaintext highlighter-rouge">DEPOSIT_CONTRACT_ADDRESS</code> is added to the Ethereum 1.0 chain defined by the <a href="https://eips.ethereum.org/EIPS/eip-155">chain-id</a> – <code class="language-plaintext highlighter-rouge">DEPOSIT_CHAIN_ID</code> – and the network-id – <code class="language-plaintext highlighter-rouge">DEPOSIT_NETWORK_ID</code> – for deposits of ETH to the beacon chain. Validator balances will be withdrawable to the shards in Phase 2.</p>
+
+<p><em>Note</em>: See <a href="https://chainid.network/">here</a> for a comprehensive list of public Ethereum chain chain-id’s and network-id’s.</p>
+
+<h3 id="deposit-function"><code class="language-plaintext highlighter-rouge">deposit</code> function</h3>
+
+<p>The deposit contract has a public <code class="language-plaintext highlighter-rouge">deposit</code> function to make deposits. It takes as arguments <code class="language-plaintext highlighter-rouge">bytes calldata pubkey, bytes calldata withdrawal_credentials, bytes calldata signature, bytes32 deposit_data_root</code>. The first three arguments populate a <a href="/eth2specs/specs/phase0/beacon-chain.html#depositdata"><code class="language-plaintext highlighter-rouge">DepositData</code></a> object, and <code class="language-plaintext highlighter-rouge">deposit_data_root</code> is the expected <code class="language-plaintext highlighter-rouge">DepositData</code> root as a protection against malformatted calldata.</p>
+
+<h4 id="deposit-amount">Deposit amount</h4>
+
+<p>The amount of ETH (rounded down to the closest Gwei) sent to the deposit contract is the deposit amount, which must be of size at least <code class="language-plaintext highlighter-rouge">MIN_DEPOSIT_AMOUNT</code> Gwei. Note that ETH consumed by the deposit contract is no longer usable on Ethereum 1.0.</p>
+
+<h4 id="withdrawal-credentials">Withdrawal credentials</h4>
+
+<p>One of the <code class="language-plaintext highlighter-rouge">DepositData</code> fields is <code class="language-plaintext highlighter-rouge">withdrawal_credentials</code>. It is a commitment to credentials for withdrawing validator balance (e.g. to another validator, or to shards). The first byte of <code class="language-plaintext highlighter-rouge">withdrawal_credentials</code> is a version number. As of now, the only expected format is as follows:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">withdrawal_credentials[:1] == BLS_WITHDRAWAL_PREFIX</code></li>
+  <li><code class="language-plaintext highlighter-rouge">withdrawal_credentials[1:] == hash(withdrawal_pubkey)[1:]</code> where <code class="language-plaintext highlighter-rouge">withdrawal_pubkey</code> is a BLS pubkey</li>
+</ul>
+
+<p>The private key corresponding to <code class="language-plaintext highlighter-rouge">withdrawal_pubkey</code> will be required to initiate a withdrawal. It can be stored separately until a withdrawal is required, e.g. in cold storage.</p>
+
+<h4 id="depositevent-log"><code class="language-plaintext highlighter-rouge">DepositEvent</code> log</h4>
+
+<p>Every Ethereum 1.0 deposit emits a <code class="language-plaintext highlighter-rouge">DepositEvent</code> log for consumption by the beacon chain. The deposit contract does little validation, pushing most of the validator onboarding logic to the beacon chain. In particular, the proof of possession (a BLS12-381 signature) is not verified by the deposit contract.</p>
+
+<h2 id="solidity-code">Solidity code</h2>
+
+<p>The deposit contract source code, written in Solidity, is available <a href="/eth2specs/solidity_deposit_contract/deposit_contract.sol">here</a>.</p>
+
+<p><em>Note</em>: To save on gas, the deposit contract uses a progressive Merkle root calculation algorithm that requires only O(log(n)) storage. See <a href="https://github.com/ethereum/research/blob/master/beacon_chain_impl/progressive_merkle_tree.py">here</a> for a Python implementation, and <a href="https://github.com/runtimeverification/verified-smart-contracts/blob/master/deposit/formal-incremental-merkle-tree-algorithm.pdf">here</a> for a formal correctness proof.</p>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

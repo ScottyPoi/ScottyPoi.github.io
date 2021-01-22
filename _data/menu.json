@@ -10,8 +10,8 @@ pages: [
         title: 'What is SSZ'
     },
     {
-        name: 'Specs'
-        url: '/specs'
+        name: 'Specs',
+        url: '/eth2specs/ssz/simple-serialize',
         title: 'SSZ Technical Specifications'
     }
 

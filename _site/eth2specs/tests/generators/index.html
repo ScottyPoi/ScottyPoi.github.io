@@ -1,0 +1,255 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="eth2-test-generators">Eth2 test generators</h1>
+
+<p>This directory contains all the generators for tests, consumed by Eth2 client implementations.</p>
+
+<p>Any issues with the generators and/or generated tests should be filed in the repository that hosts the generator outputs,
+ here: <a href="https://github.com/ethereum/eth2.0-spec-tests">ethereum/eth2.0-spec-tests</a>.</p>
+
+<p>On releases, test generators are run by the release manager. Test-generation of mainnet tests can take a significant amount of time, and is better left out of a CI setup.</p>
+
+<p>An automated nightly tests release system, with a config filter applied, is being considered as implementation needs mature.</p>
+
+<h2 id="table-of-contents">Table of contents</h2>
+
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+<ul>
+  <li><a href="#how-to-run-generators">How to run generators</a>
+    <ul>
+      <li><a href="#cleaning">Cleaning</a></li>
+      <li><a href="#running-all-test-generators">Running all test generators</a></li>
+      <li><a href="#running-a-single-generator">Running a single generator</a></li>
+    </ul>
+  </li>
+  <li><a href="#developing-a-generator">Developing a generator</a></li>
+  <li><a href="#how-to-add-a-new-test-generator">How to add a new test generator</a></li>
+  <li><a href="#how-to-remove-a-test-generator">How to remove a test generator</a></li>
+</ul>
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+<h2 id="how-to-run-generators">How to run generators</h2>
+
+<p>Prerequisites:</p>
+<ul>
+  <li>Python 3 installed</li>
+  <li>PIP 3</li>
+  <li>GNU Make</li>
+</ul>
+
+<h3 id="cleaning">Cleaning</h3>
+
+<p>This removes the existing virtual environments (<code class="language-plaintext highlighter-rouge">/test_generators/&lt;generator&gt;/venv</code>) and generated tests (<code class="language-plaintext highlighter-rouge">/yaml_tests/</code>).</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>make clean 
+</code></pre></div></div>
+
+<h3 id="running-all-test-generators">Running all test generators</h3>
+
+<p>This runs all of the generators.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>make <span class="nt">-j</span> 4 gen_yaml_tests
+</code></pre></div></div>
+
+<p>The <code class="language-plaintext highlighter-rouge">-j N</code> flag makes the generators run in parallel, with <code class="language-plaintext highlighter-rouge">N</code> being the amount of cores.</p>
+
+<h3 id="running-a-single-generator">Running a single generator</h3>
+
+<p>The makefile auto-detects generators in the <code class="language-plaintext highlighter-rouge">test_generators</code> directory and provides a tests-gen target for each generator. See example:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>make ./eth2.0-spec-tests/tests/shuffling/
+</code></pre></div></div>
+
+<h2 id="developing-a-generator">Developing a generator</h2>
+
+<p>Simply open up the generator (not all at once) of choice in your favorite IDE/editor and run:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># From the root of the generator directory:</span>
+<span class="c"># Create a virtual environment (any venv/.venv/.venvs is git-ignored)</span>
+python3 <span class="nt">-m</span> venv venv
+<span class="c"># Activate the venv, this is where dependencies are installed for the generator</span>
+<span class="nb">.</span> venv/bin/activate
+</code></pre></div></div>
+
+<p>Now that you have a virtual environment, write your generator.
+It’s recommended to extend the base-generator.</p>
+
+<p>Create a <code class="language-plaintext highlighter-rouge">requirements.txt</code> in the root of your generator directory:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>../../core/gen_helpers
+../../core/config_helpers
+../../core/pyspec
+</code></pre></div></div>
+
+<p>The config helper and pyspec is optional, but preferred. We encourage generators to derive tests from the spec itself in order to prevent code duplication and outdated tests.
+Applying configurations to the spec is simple and enables you to create test suites with different contexts.</p>
+
+<p><em>Note</em>: Make sure to run <code class="language-plaintext highlighter-rouge">make pyspec</code> from the root of the specs repository in order to build the pyspec requirement.</p>
+
+<p>Install all the necessary requirements (re-run when you add more):</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pip3 <span class="nb">install</span> <span class="nt">-r</span> requirements.txt
+</code></pre></div></div>
+
+<p>Note that you may need <code class="language-plaintext highlighter-rouge">PYTHONPATH</code> to include the pyspec directory, as with running normal tests,
+ to run test generators manually. The makefile handles this for you already.</p>
+
+<p>And write your initial test generator, extending the base generator:</p>
+
+<p>Write a <code class="language-plaintext highlighter-rouge">main.py</code> file. The shuffling test generator is a good minimal starting point:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">eth2spec.phase0</span> <span class="kn">import</span> <span class="n">spec</span> <span class="k">as</span> <span class="n">spec</span>
+<span class="kn">from</span> <span class="nn">eth_utils</span> <span class="kn">import</span> <span class="n">to_tuple</span>
+<span class="kn">from</span> <span class="nn">gen_base</span> <span class="kn">import</span> <span class="n">gen_runner</span><span class="p">,</span> <span class="n">gen_typing</span>
+<span class="kn">from</span> <span class="nn">preset_loader</span> <span class="kn">import</span> <span class="n">loader</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Iterable</span>
+
+
+<span class="k">def</span> <span class="nf">shuffling_case_fn</span><span class="p">(</span><span class="n">seed</span><span class="p">,</span> <span class="n">count</span><span class="p">):</span>
+    <span class="k">yield</span> <span class="s">'mapping'</span><span class="p">,</span> <span class="s">'data'</span><span class="p">,</span> <span class="p">{</span>
+        <span class="s">'seed'</span><span class="p">:</span> <span class="s">'0x'</span> <span class="o">+</span> <span class="n">seed</span><span class="p">.</span><span class="nb">hex</span><span class="p">(),</span>
+        <span class="s">'count'</span><span class="p">:</span> <span class="n">count</span><span class="p">,</span>
+        <span class="s">'mapping'</span><span class="p">:</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">spec</span><span class="p">.</span><span class="n">compute_shuffled_index</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">count</span><span class="p">,</span> <span class="n">seed</span><span class="p">))</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">count</span><span class="p">)]</span>
+    <span class="p">}</span>
+
+
+<span class="k">def</span> <span class="nf">shuffling_case</span><span class="p">(</span><span class="n">seed</span><span class="p">,</span> <span class="n">count</span><span class="p">):</span>
+    <span class="k">return</span> <span class="s">f'shuffle_0x</span><span class="si">{</span><span class="n">seed</span><span class="p">.</span><span class="nb">hex</span><span class="p">()</span><span class="si">}</span><span class="s">_</span><span class="si">{</span><span class="n">count</span><span class="si">}</span><span class="s">'</span><span class="p">,</span> <span class="k">lambda</span><span class="p">:</span> <span class="n">shuffling_case_fn</span><span class="p">(</span><span class="n">seed</span><span class="p">,</span> <span class="n">count</span><span class="p">)</span>
+
+
+<span class="o">@</span><span class="n">to_tuple</span>
+<span class="k">def</span> <span class="nf">shuffling_test_cases</span><span class="p">():</span>
+    <span class="k">for</span> <span class="n">seed</span> <span class="ow">in</span> <span class="p">[</span><span class="n">spec</span><span class="p">.</span><span class="nb">hash</span><span class="p">(</span><span class="n">seed_init_value</span><span class="p">.</span><span class="n">to_bytes</span><span class="p">(</span><span class="n">length</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">byteorder</span><span class="o">=</span><span class="s">'little'</span><span class="p">))</span> <span class="k">for</span> <span class="n">seed_init_value</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">30</span><span class="p">)]:</span>
+        <span class="k">for</span> <span class="n">count</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">33</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span> <span class="mi">9999</span><span class="p">]:</span>
+            <span class="k">yield</span> <span class="n">shuffling_case</span><span class="p">(</span><span class="n">seed</span><span class="p">,</span> <span class="n">count</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">create_provider</span><span class="p">(</span><span class="n">config_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gen_typing</span><span class="p">.</span><span class="n">TestProvider</span><span class="p">:</span>
+
+    <span class="k">def</span> <span class="nf">prepare_fn</span><span class="p">(</span><span class="n">configs_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">presets</span> <span class="o">=</span> <span class="n">loader</span><span class="p">.</span><span class="n">load_presets</span><span class="p">(</span><span class="n">configs_path</span><span class="p">,</span> <span class="n">config_name</span><span class="p">)</span>
+        <span class="n">spec</span><span class="p">.</span><span class="n">apply_constants_preset</span><span class="p">(</span><span class="n">presets</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">config_name</span>
+
+    <span class="k">def</span> <span class="nf">cases_fn</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">gen_typing</span><span class="p">.</span><span class="n">TestCase</span><span class="p">]:</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">case_name</span><span class="p">,</span> <span class="n">case_fn</span><span class="p">)</span> <span class="ow">in</span> <span class="n">shuffling_test_cases</span><span class="p">():</span>
+            <span class="k">yield</span> <span class="n">gen_typing</span><span class="p">.</span><span class="n">TestCase</span><span class="p">(</span>
+                <span class="n">fork_name</span><span class="o">=</span><span class="s">'phase0'</span><span class="p">,</span>
+                <span class="n">runner_name</span><span class="o">=</span><span class="s">'shuffling'</span><span class="p">,</span>
+                <span class="n">handler_name</span><span class="o">=</span><span class="s">'core'</span><span class="p">,</span>
+                <span class="n">suite_name</span><span class="o">=</span><span class="s">'shuffle'</span><span class="p">,</span>
+                <span class="n">case_name</span><span class="o">=</span><span class="n">case_name</span><span class="p">,</span>
+                <span class="n">case_fn</span><span class="o">=</span><span class="n">case_fn</span>
+            <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">gen_typing</span><span class="p">.</span><span class="n">TestProvider</span><span class="p">(</span><span class="n">prepare</span><span class="o">=</span><span class="n">prepare_fn</span><span class="p">,</span> <span class="n">make_cases</span><span class="o">=</span><span class="n">cases_fn</span><span class="p">)</span>
+
+
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">"__main__"</span><span class="p">:</span>
+    <span class="n">gen_runner</span><span class="p">.</span><span class="n">run_generator</span><span class="p">(</span><span class="s">"shuffling"</span><span class="p">,</span> <span class="p">[</span><span class="n">create_provider</span><span class="p">(</span><span class="s">"minimal"</span><span class="p">),</span> <span class="n">create_provider</span><span class="p">(</span><span class="s">"mainnet"</span><span class="p">)])</span>
+</code></pre></div></div>
+
+<p>This generator:</p>
+<ul>
+  <li>builds off of <code class="language-plaintext highlighter-rouge">gen_runner.run_generator</code> to handle configuration / filter / output logic.</li>
+  <li>parametrized the creation of a test-provider to support multiple configs.</li>
+  <li>Iterates through tests cases.</li>
+  <li>Each test case provides a <code class="language-plaintext highlighter-rouge">case_fn</code>, to be executed by the <code class="language-plaintext highlighter-rouge">gen_runner.run_generator</code> if the case needs to be generated. But skipped otherwise.</li>
+</ul>
+
+<p>To extend this, one could decide to parametrize the <code class="language-plaintext highlighter-rouge">shuffling_test_cases</code> function, and create test provider for any test-yielding function.</p>
+
+<p>Another example, to generate tests from pytests:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">create_provider</span><span class="p">(</span><span class="n">handler_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">tests_src</span><span class="p">,</span> <span class="n">config_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">gen_typing</span><span class="p">.</span><span class="n">TestProvider</span><span class="p">:</span>
+
+    <span class="k">def</span> <span class="nf">prepare_fn</span><span class="p">(</span><span class="n">configs_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">presets</span> <span class="o">=</span> <span class="n">loader</span><span class="p">.</span><span class="n">load_presets</span><span class="p">(</span><span class="n">configs_path</span><span class="p">,</span> <span class="n">config_name</span><span class="p">)</span>
+        <span class="n">spec_phase0</span><span class="p">.</span><span class="n">apply_constants_preset</span><span class="p">(</span><span class="n">presets</span><span class="p">)</span>
+        <span class="n">spec_phase1</span><span class="p">.</span><span class="n">apply_constants_preset</span><span class="p">(</span><span class="n">presets</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">config_name</span>
+
+    <span class="k">def</span> <span class="nf">cases_fn</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">gen_typing</span><span class="p">.</span><span class="n">TestCase</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="n">generate_from_tests</span><span class="p">(</span>
+            <span class="n">runner_name</span><span class="o">=</span><span class="s">'epoch_processing'</span><span class="p">,</span>
+            <span class="n">handler_name</span><span class="o">=</span><span class="n">handler_name</span><span class="p">,</span>
+            <span class="n">src</span><span class="o">=</span><span class="n">tests_src</span><span class="p">,</span>
+            <span class="n">fork_name</span><span class="o">=</span><span class="s">'phase0'</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">gen_typing</span><span class="p">.</span><span class="n">TestProvider</span><span class="p">(</span><span class="n">prepare</span><span class="o">=</span><span class="n">prepare_fn</span><span class="p">,</span> <span class="n">make_cases</span><span class="o">=</span><span class="n">cases_fn</span><span class="p">)</span>
+
+
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="s">"__main__"</span><span class="p">:</span>
+    <span class="n">gen_runner</span><span class="p">.</span><span class="n">run_generator</span><span class="p">(</span><span class="s">"epoch_processing"</span><span class="p">,</span> <span class="p">[</span>
+        <span class="n">create_provider</span><span class="p">(</span><span class="s">'final_updates'</span><span class="p">,</span> <span class="n">test_process_final_updates</span><span class="p">,</span> <span class="s">'minimal'</span><span class="p">),</span>
+        <span class="p">...</span>
+    <span class="p">])</span>
+
+</code></pre></div></div>
+
+<p>Here multiple phases load the configuration, and the stream of test cases is derived from a pytest file using the <code class="language-plaintext highlighter-rouge">generate_from_tests</code> utility.</p>
+
+<p>Recommendations:</p>
+<ul>
+  <li>You can have more than just one test provider.</li>
+  <li>Your test provider is free to output any configuration and combination of runner/handler/fork/case name.</li>
+  <li>You can split your test case generators into different Python files/packages; this is good for code organization.</li>
+  <li>Use config <code class="language-plaintext highlighter-rouge">minimal</code> for performance and simplicity, but also implement a suite with the <code class="language-plaintext highlighter-rouge">mainnet</code> config where necessary.</li>
+  <li>You may be able to write your test case provider in a way where it does not make assumptions on constants.
+If so, you can generate test cases with different configurations for the same scenario (see example).</li>
+  <li>See <a href="/eth2specs/tests/core/gen_helpers/"><code class="language-plaintext highlighter-rouge">tests/core/gen_helpers/README.md</code></a> for command line options for generators.</li>
+</ul>
+
+<h2 id="how-to-add-a-new-test-generator">How to add a new test generator</h2>
+
+<p>To add a new test generator that builds <code class="language-plaintext highlighter-rouge">New Tests</code>:</p>
+
+<ol>
+  <li>Create a new directory <code class="language-plaintext highlighter-rouge">new_tests</code> within the <code class="language-plaintext highlighter-rouge">test_generators</code> directory.
+ Note that <code class="language-plaintext highlighter-rouge">new_tests</code> is also the name of the directory in which the tests will appear in the tests repository later.</li>
+  <li>Your generator is assumed to have a <code class="language-plaintext highlighter-rouge">requirements.txt</code> file,
+ with any dependencies it may need. Leave it empty if your generator has none.</li>
+  <li>Your generator is assumed to have a <code class="language-plaintext highlighter-rouge">main.py</code> file in its root.
+ By adding the base generator to your requirements, you can make a generator really easily. See docs below.</li>
+  <li>Your generator is called with <code class="language-plaintext highlighter-rouge">-o some/file/path/for_testing/can/be_anything -c some/other/path/to_configs/</code>.
+ The base generator helps you handle this; you only have to define test case providers.</li>
+  <li>Finally, add any linting or testing commands to the
+ <a href="../.circleci/config.yml">circleci config file</a> if desired to increase code quality.
+ Or add it to the <a href="../Makefile"><code class="language-plaintext highlighter-rouge">Makefile</code></a>, if it can be run locally.</li>
+</ol>
+
+<p><em>Note</em>: You do not have to change the makefile.
+However, if necessary (e.g. not using Python, or mixing in other languages), submit an issue, and it can be a special case.
+Do note that generators should be easy to maintain, lean, and based on the spec.</p>
+
+<h2 id="how-to-remove-a-test-generator">How to remove a test generator</h2>
+
+<p>If a test generator is not needed anymore, undo the steps described above and make a new release:</p>
+
+<ol>
+  <li>Remove the generator directory.</li>
+  <li>Remove the generated tests in the <a href="https://github.com/ethereum/eth2.0-spec-tests"><code class="language-plaintext highlighter-rouge">eth2.0-spec-tests</code></a> repository by opening a pull request there.</li>
+  <li>Make a new release.</li>
+</ol>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

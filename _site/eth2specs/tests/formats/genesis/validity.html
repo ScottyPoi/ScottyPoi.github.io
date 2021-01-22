@@ -1,0 +1,45 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="genesis-validity-testing">Genesis validity testing</h1>
+
+<p>Tests if a genesis state is valid, i.e. if it counts as trigger to launch.</p>
+
+<h2 id="test-case-format">Test case format</h2>
+
+<h3 id="genesisyaml"><code class="language-plaintext highlighter-rouge">genesis.yaml</code></h3>
+
+<p>A <code class="language-plaintext highlighter-rouge">BeaconState</code>, the state to validate as genesis candidate.</p>
+
+<p>Also available as <code class="language-plaintext highlighter-rouge">genesis.ssz</code>.</p>
+
+<h3 id="is_validyaml"><code class="language-plaintext highlighter-rouge">is_valid.yaml</code></h3>
+
+<p>A boolean, true if the genesis state is deemed valid as to launch with, false otherwise.</p>
+
+<h2 id="processing">Processing</h2>
+
+<p>To process the data, call <code class="language-plaintext highlighter-rouge">is_valid_genesis_state(genesis)</code>.</p>
+
+<h2 id="condition">Condition</h2>
+
+<p>The result of calling <code class="language-plaintext highlighter-rouge">is_valid_genesis_state(genesis)</code> should match the expected <code class="language-plaintext highlighter-rouge">is_valid</code> boolean.</p>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

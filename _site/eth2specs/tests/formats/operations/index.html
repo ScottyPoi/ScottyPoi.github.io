@@ -1,0 +1,114 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="operations-tests">Operations tests</h1>
+
+<p>The different kinds of operations (“transactions”) are tested individually with test handlers.</p>
+
+<h2 id="test-case-format">Test case format</h2>
+
+<h3 id="metayaml"><code class="language-plaintext highlighter-rouge">meta.yaml</code></h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">description</span><span class="pi">:</span> <span class="s">string    -- Optional description of test case, purely for debugging purposes.</span>
+                          <span class="s">Tests should use the directory name of the test case as identifier, not the description.</span>
+<span class="na">bls_setting</span><span class="pi">:</span> <span class="s">int       -- see general test-format spec.</span>
+</code></pre></div></div>
+
+<h3 id="preyaml"><code class="language-plaintext highlighter-rouge">pre.yaml</code></h3>
+
+<p>A YAML-encoded <code class="language-plaintext highlighter-rouge">BeaconState</code>, the state before applying the operation.</p>
+
+<p>Also available as <code class="language-plaintext highlighter-rouge">pre.ssz</code>.</p>
+
+<h3 id="input-nameyaml"><code class="language-plaintext highlighter-rouge">&lt;input-name&gt;.yaml</code></h3>
+
+<p>A YAML-encoded operation object, e.g. a <code class="language-plaintext highlighter-rouge">ProposerSlashing</code>, or <code class="language-plaintext highlighter-rouge">Deposit</code>.</p>
+
+<p>Also available as <code class="language-plaintext highlighter-rouge">&lt;input-name&gt;.ssz</code>.</p>
+
+<h3 id="postyaml"><code class="language-plaintext highlighter-rouge">post.yaml</code></h3>
+
+<p>A YAML-encoded <code class="language-plaintext highlighter-rouge">BeaconState</code>, the state after applying the operation. No value if operation processing is aborted.</p>
+
+<p>Also available as <code class="language-plaintext highlighter-rouge">post.ssz</code>.</p>
+
+<h2 id="condition">Condition</h2>
+
+<p>A handler of the <code class="language-plaintext highlighter-rouge">operations</code> test-runner should process these cases,
+ calling the corresponding processing implementation.
+This excludes the other parts of the block-transition.</p>
+
+<p>Operations:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th><em><code class="language-plaintext highlighter-rouge">operation-name</code></em></th>
+      <th><em><code class="language-plaintext highlighter-rouge">operation-object</code></em></th>
+      <th><em><code class="language-plaintext highlighter-rouge">input name</code></em></th>
+      <th><em><code class="language-plaintext highlighter-rouge">processing call</code></em></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">attestation</code></td>
+      <td><code class="language-plaintext highlighter-rouge">Attestation</code></td>
+      <td><code class="language-plaintext highlighter-rouge">attestation</code></td>
+      <td><code class="language-plaintext highlighter-rouge">process_attestation(state, attestation)</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">attester_slashing</code></td>
+      <td><code class="language-plaintext highlighter-rouge">AttesterSlashing</code></td>
+      <td><code class="language-plaintext highlighter-rouge">attester_slashing</code></td>
+      <td><code class="language-plaintext highlighter-rouge">process_attester_slashing(state, attester_slashing)</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">block_header</code></td>
+      <td><code class="language-plaintext highlighter-rouge">BeaconBlock</code></td>
+      <td><strong><code class="language-plaintext highlighter-rouge">block</code></strong></td>
+      <td><code class="language-plaintext highlighter-rouge">process_block_header(state, block)</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">deposit</code></td>
+      <td><code class="language-plaintext highlighter-rouge">Deposit</code></td>
+      <td><code class="language-plaintext highlighter-rouge">deposit</code></td>
+      <td><code class="language-plaintext highlighter-rouge">process_deposit(state, deposit)</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">proposer_slashing</code></td>
+      <td><code class="language-plaintext highlighter-rouge">ProposerSlashing</code></td>
+      <td><code class="language-plaintext highlighter-rouge">proposer_slashing</code></td>
+      <td><code class="language-plaintext highlighter-rouge">process_proposer_slashing(state, proposer_slashing)</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">voluntary_exit</code></td>
+      <td><code class="language-plaintext highlighter-rouge">SignedVoluntaryExit</code></td>
+      <td><code class="language-plaintext highlighter-rouge">voluntary_exit</code></td>
+      <td><code class="language-plaintext highlighter-rouge">process_voluntary_exit(state, voluntary_exit)</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Note that <code class="language-plaintext highlighter-rouge">block_header</code> is not strictly an operation (and is a full <code class="language-plaintext highlighter-rouge">Block</code>), but processed in the same manner, and hence included here.</p>
+
+<p>The resulting state should match the expected <code class="language-plaintext highlighter-rouge">post</code> state, or if the <code class="language-plaintext highlighter-rouge">post</code> state is left blank,
+ the handler should reject the input operation as invalid.</p>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

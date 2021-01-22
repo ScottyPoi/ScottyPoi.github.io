@@ -1,0 +1,363 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="merkle-proof-formats">Merkle proof formats</h1>
+
+<p><strong>Notice</strong>: This document is a work-in-progress for researchers and implementers.</p>
+
+<h2 id="table-of-contents">Table of contents</h2>
+<!-- TOC -->
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+<ul>
+  <li><a href="#helper-functions">Helper functions</a></li>
+  <li><a href="#generalized-merkle-tree-index">Generalized Merkle tree index</a></li>
+  <li><a href="#ssz-object-to-index">SSZ object to index</a>
+    <ul>
+      <li><a href="#helpers-for-generalized-indices">Helpers for generalized indices</a>
+        <ul>
+          <li><a href="#concat_generalized_indices"><code class="language-plaintext highlighter-rouge">concat_generalized_indices</code></a></li>
+          <li><a href="#get_generalized_index_length"><code class="language-plaintext highlighter-rouge">get_generalized_index_length</code></a></li>
+          <li><a href="#get_generalized_index_bit"><code class="language-plaintext highlighter-rouge">get_generalized_index_bit</code></a></li>
+          <li><a href="#generalized_index_sibling"><code class="language-plaintext highlighter-rouge">generalized_index_sibling</code></a></li>
+          <li><a href="#generalized_index_child"><code class="language-plaintext highlighter-rouge">generalized_index_child</code></a></li>
+          <li><a href="#generalized_index_parent"><code class="language-plaintext highlighter-rouge">generalized_index_parent</code></a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li><a href="#merkle-multiproofs">Merkle multiproofs</a></li>
+</ul>
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+<!-- /TOC -->
+
+<h2 id="helper-functions">Helper functions</h2>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_power_of_two_ceil</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="s">"""
+    Get the power of 2 for given input, or the closest higher power of 2 if the input is not a power of 2.
+    Commonly used for "how many nodes do I need for a bottom tree layer fitting x elements?"
+    Example: 0-&gt;1, 1-&gt;1, 2-&gt;2, 3-&gt;4, 4-&gt;4, 5-&gt;8, 6-&gt;8, 7-&gt;8, 8-&gt;8, 9-&gt;16.
+    """</span>
+    <span class="k">if</span> <span class="n">x</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">1</span>
+    <span class="k">elif</span> <span class="n">x</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">2</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">get_power_of_two_ceil</span><span class="p">((</span><span class="n">x</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_power_of_two_floor</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="s">"""
+    Get the power of 2 for given input, or the closest lower power of 2 if the input is not a power of 2.
+    The zero case is a placeholder and not used for math with generalized indices.
+    Commonly used for "what power of two makes up the root bit of the generalized index?"
+    Example: 0-&gt;1, 1-&gt;1, 2-&gt;2, 3-&gt;2, 4-&gt;4, 5-&gt;4, 6-&gt;4, 7-&gt;4, 8-&gt;8, 9-&gt;8
+    """</span>
+    <span class="k">if</span> <span class="n">x</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">1</span>
+    <span class="k">if</span> <span class="n">x</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">x</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">get_power_of_two_floor</span><span class="p">(</span><span class="n">x</span> <span class="o">//</span> <span class="mi">2</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h2 id="generalized-merkle-tree-index">Generalized Merkle tree index</h2>
+
+<p>In a binary Merkle tree, we define a “generalized index” of a node as <code class="language-plaintext highlighter-rouge">2**depth + index</code>. Visually, this looks as follows:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    1
+ 2     3
+4 5   6 7
+   ...
+</code></pre></div></div>
+
+<p>Note that the generalized index has the convenient property that the two children of node <code class="language-plaintext highlighter-rouge">k</code> are <code class="language-plaintext highlighter-rouge">2k</code> and <code class="language-plaintext highlighter-rouge">2k+1</code>, and also that it equals the position of a node in the linear representation of the Merkle tree that’s computed by this function:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">merkle_tree</span><span class="p">(</span><span class="n">leaves</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Bytes32</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Bytes32</span><span class="p">]:</span>
+    <span class="s">"""
+    Return an array representing the tree nodes by generalized index: 
+    [0, 1, 2, 3, 4, 5, 6, 7], where each layer is a power of 2. The 0 index is ignored. The 1 index is the root.
+    The result will be twice the size as the padded bottom layer for the input leaves.
+    """</span>
+    <span class="n">bottom_length</span> <span class="o">=</span> <span class="n">get_power_of_two_ceil</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">leaves</span><span class="p">))</span>
+    <span class="n">o</span> <span class="o">=</span> <span class="p">[</span><span class="n">Bytes32</span><span class="p">()]</span> <span class="o">*</span> <span class="n">bottom_length</span> <span class="o">+</span> <span class="nb">list</span><span class="p">(</span><span class="n">leaves</span><span class="p">)</span> <span class="o">+</span> <span class="p">[</span><span class="n">Bytes32</span><span class="p">()]</span> <span class="o">*</span> <span class="p">(</span><span class="n">bottom_length</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">leaves</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">bottom_length</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+        <span class="n">o</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="nb">hash</span><span class="p">(</span><span class="n">o</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="n">o</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">o</span>
+</code></pre></div></div>
+
+<p>We define a custom type <code class="language-plaintext highlighter-rouge">GeneralizedIndex</code> as a Python integer type in this document. It can be represented as a Bitvector/Bitlist object as well.</p>
+
+<p>We will define Merkle proofs in terms of generalized indices.</p>
+
+<h2 id="ssz-object-to-index">SSZ object to index</h2>
+
+<p>We can describe the hash tree of any SSZ object, rooted in <code class="language-plaintext highlighter-rouge">hash_tree_root(object)</code>, as a binary Merkle tree whose depth may vary. For example, an object <code class="language-plaintext highlighter-rouge">{x: bytes32, y: List[uint64]}</code> would look as follows:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>     root
+    /    \
+   x    y_root
+        /    \
+y_data_root  len(y)
+    / \
+   /\ /\
+  .......
+</code></pre></div></div>
+
+<p>We can now define a concept of a “path”, a way of describing a function that takes as input an SSZ object and outputs some specific (possibly deeply nested) member. For example, <code class="language-plaintext highlighter-rouge">foo -&gt; foo.x</code> is a path, as are <code class="language-plaintext highlighter-rouge">foo -&gt; len(foo.y)</code> and <code class="language-plaintext highlighter-rouge">foo -&gt; foo.y[5].w</code>. We’ll describe paths as lists, which can have two representations. In “human-readable form”, they are <code class="language-plaintext highlighter-rouge">["x"]</code>, <code class="language-plaintext highlighter-rouge">["y", "__len__"]</code> and <code class="language-plaintext highlighter-rouge">["y", 5, "w"]</code> respectively. In “encoded form”, they are lists of <code class="language-plaintext highlighter-rouge">uint64</code> values, in these cases (assuming the fields of <code class="language-plaintext highlighter-rouge">foo</code> in order are <code class="language-plaintext highlighter-rouge">x</code> then <code class="language-plaintext highlighter-rouge">y</code>, and <code class="language-plaintext highlighter-rouge">w</code> is the first field of <code class="language-plaintext highlighter-rouge">y[i]</code>) <code class="language-plaintext highlighter-rouge">[0]</code>, <code class="language-plaintext highlighter-rouge">[1, 2**64-1]</code>, <code class="language-plaintext highlighter-rouge">[1, 5, 0]</code>. We define <code class="language-plaintext highlighter-rouge">SSZVariableName</code> as the member variable name string, i.e., a path is presented as a sequence of integers and <code class="language-plaintext highlighter-rouge">SSZVariableName</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">item_length</span><span class="p">(</span><span class="n">typ</span><span class="p">:</span> <span class="n">SSZType</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="s">"""
+    Return the number of bytes in a basic type, or 32 (a full hash) for compound types.
+    """</span>
+    <span class="k">if</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">typ</span><span class="p">,</span> <span class="n">BasicValue</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">typ</span><span class="p">.</span><span class="n">byte_len</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">32</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_elem_type</span><span class="p">(</span><span class="n">typ</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">BaseBytes</span><span class="p">,</span> <span class="n">BaseList</span><span class="p">,</span> <span class="n">Container</span><span class="p">],</span>
+                  <span class="n">index_or_variable_name</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">SSZVariableName</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">SSZType</span><span class="p">:</span>
+    <span class="s">"""
+    Return the type of the element of an object of the given type with the given index
+    or member variable name (eg. `7` for `x[7]`, `"foo"` for `x.foo`)
+    """</span>
+    <span class="k">return</span> <span class="n">typ</span><span class="p">.</span><span class="n">get_fields</span><span class="p">()[</span><span class="n">index_or_variable_name</span><span class="p">]</span> <span class="k">if</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">typ</span><span class="p">,</span> <span class="n">Container</span><span class="p">)</span> <span class="k">else</span> <span class="n">typ</span><span class="p">.</span><span class="n">elem_type</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">chunk_count</span><span class="p">(</span><span class="n">typ</span><span class="p">:</span> <span class="n">SSZType</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="s">"""
+    Return the number of hashes needed to represent the top-level elements in the given type
+    (eg. `x.foo` or `x[7]` but not `x[7].bar` or `x.foo.baz`). In all cases except lists/vectors
+    of basic types, this is simply the number of top-level elements, as each element gets one
+    hash. For lists/vectors of basic types, it is often fewer because multiple basic elements
+    can be packed into one 32-byte chunk.
+    """</span>
+    <span class="c1"># typ.length describes the limit for list types, or the length for vector types.
+</span>    <span class="k">if</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">typ</span><span class="p">,</span> <span class="n">BasicValue</span><span class="p">):</span>
+        <span class="k">return</span> <span class="mi">1</span>
+    <span class="k">elif</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">typ</span><span class="p">,</span> <span class="n">Bits</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">typ</span><span class="p">.</span><span class="n">length</span> <span class="o">+</span> <span class="mi">255</span><span class="p">)</span> <span class="o">//</span> <span class="mi">256</span>
+    <span class="k">elif</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">typ</span><span class="p">,</span> <span class="n">Elements</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">typ</span><span class="p">.</span><span class="n">length</span> <span class="o">*</span> <span class="n">item_length</span><span class="p">(</span><span class="n">typ</span><span class="p">.</span><span class="n">elem_type</span><span class="p">)</span> <span class="o">+</span> <span class="mi">31</span><span class="p">)</span> <span class="o">//</span> <span class="mi">32</span>
+    <span class="k">elif</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">typ</span><span class="p">,</span> <span class="n">Container</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">typ</span><span class="p">.</span><span class="n">get_fields</span><span class="p">())</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="nb">Exception</span><span class="p">(</span><span class="s">f"Type not supported: </span><span class="si">{</span><span class="n">typ</span><span class="si">}</span><span class="s">"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_item_position</span><span class="p">(</span><span class="n">typ</span><span class="p">:</span> <span class="n">SSZType</span><span class="p">,</span> <span class="n">index_or_variable_name</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">SSZVariableName</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+    <span class="s">"""
+    Return three variables:
+        (i) the index of the chunk in which the given element of the item is represented;
+        (ii) the starting byte position within the chunk;
+        (iii) the ending byte position within the chunk.
+    For example: for a 6-item list of uint64 values, index=2 will return (0, 16, 24), index=5 will return (1, 8, 16)
+    """</span>
+    <span class="k">if</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">typ</span><span class="p">,</span> <span class="n">Elements</span><span class="p">):</span>
+        <span class="n">index</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">index_or_variable_name</span><span class="p">)</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">index</span> <span class="o">*</span> <span class="n">item_length</span><span class="p">(</span><span class="n">typ</span><span class="p">.</span><span class="n">elem_type</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">start</span> <span class="o">//</span> <span class="mi">32</span><span class="p">,</span> <span class="n">start</span> <span class="o">%</span> <span class="mi">32</span><span class="p">,</span> <span class="n">start</span> <span class="o">%</span> <span class="mi">32</span> <span class="o">+</span> <span class="n">item_length</span><span class="p">(</span><span class="n">typ</span><span class="p">.</span><span class="n">elem_type</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">typ</span><span class="p">,</span> <span class="n">Container</span><span class="p">):</span>
+        <span class="n">variable_name</span> <span class="o">=</span> <span class="n">index_or_variable_name</span>
+        <span class="k">return</span> <span class="n">typ</span><span class="p">.</span><span class="n">get_field_names</span><span class="p">().</span><span class="n">index</span><span class="p">(</span><span class="n">variable_name</span><span class="p">),</span> <span class="mi">0</span><span class="p">,</span> <span class="n">item_length</span><span class="p">(</span><span class="n">get_elem_type</span><span class="p">(</span><span class="n">typ</span><span class="p">,</span> <span class="n">variable_name</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="nb">Exception</span><span class="p">(</span><span class="s">"Only lists/vectors/containers supported"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_generalized_index</span><span class="p">(</span><span class="n">typ</span><span class="p">:</span> <span class="n">SSZType</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">SSZVariableName</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="n">GeneralizedIndex</span><span class="p">:</span>
+    <span class="s">"""
+    Converts a path (eg. `[7, "foo", 3]` for `x[7].foo[3]`, `[12, "bar", "__len__"]` for
+    `len(x[12].bar)`) into the generalized index representing its position in the Merkle tree.
+    """</span>
+    <span class="n">root</span> <span class="o">=</span> <span class="n">GeneralizedIndex</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">path</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="ow">not</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">typ</span><span class="p">,</span> <span class="n">BasicValue</span><span class="p">)</span>  <span class="c1"># If we descend to a basic type, the path cannot continue further
+</span>        <span class="k">if</span> <span class="n">p</span> <span class="o">==</span> <span class="s">'__len__'</span><span class="p">:</span>
+            <span class="n">typ</span> <span class="o">=</span> <span class="n">uint64</span>
+            <span class="k">assert</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">typ</span><span class="p">,</span> <span class="p">(</span><span class="n">List</span><span class="p">,</span> <span class="n">ByteList</span><span class="p">))</span>
+            <span class="n">root</span> <span class="o">=</span> <span class="n">GeneralizedIndex</span><span class="p">(</span><span class="n">root</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">pos</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">get_item_position</span><span class="p">(</span><span class="n">typ</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span>
+            <span class="n">base_index</span> <span class="o">=</span> <span class="p">(</span><span class="n">GeneralizedIndex</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="k">if</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">typ</span><span class="p">,</span> <span class="p">(</span><span class="n">List</span><span class="p">,</span> <span class="n">ByteList</span><span class="p">))</span> <span class="k">else</span> <span class="n">GeneralizedIndex</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+            <span class="n">root</span> <span class="o">=</span> <span class="n">GeneralizedIndex</span><span class="p">(</span><span class="n">root</span> <span class="o">*</span> <span class="n">base_index</span> <span class="o">*</span> <span class="n">get_power_of_two_ceil</span><span class="p">(</span><span class="n">chunk_count</span><span class="p">(</span><span class="n">typ</span><span class="p">))</span> <span class="o">+</span> <span class="n">pos</span><span class="p">)</span>
+            <span class="n">typ</span> <span class="o">=</span> <span class="n">get_elem_type</span><span class="p">(</span><span class="n">typ</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">root</span>
+</code></pre></div></div>
+
+<h3 id="helpers-for-generalized-indices">Helpers for generalized indices</h3>
+
+<p><em>Usage note: functions outside this section should manipulate generalized indices using only functions inside this section. This is to make it easier for developers to implement generalized indices with underlying representations other than bigints.</em></p>
+
+<h4 id="concat_generalized_indices"><code class="language-plaintext highlighter-rouge">concat_generalized_indices</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">concat_generalized_indices</span><span class="p">(</span><span class="o">*</span><span class="n">indices</span><span class="p">:</span> <span class="n">GeneralizedIndex</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">GeneralizedIndex</span><span class="p">:</span>
+    <span class="s">"""
+    Given generalized indices i1 for A -&gt; B, i2 for B -&gt; C .... i_n for Y -&gt; Z, returns
+    the generalized index for A -&gt; Z.
+    """</span>
+    <span class="n">o</span> <span class="o">=</span> <span class="n">GeneralizedIndex</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">indices</span><span class="p">:</span>
+        <span class="n">o</span> <span class="o">=</span> <span class="n">GeneralizedIndex</span><span class="p">(</span><span class="n">o</span> <span class="o">*</span> <span class="n">get_power_of_two_floor</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="n">i</span> <span class="o">-</span> <span class="n">get_power_of_two_floor</span><span class="p">(</span><span class="n">i</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="n">o</span>
+</code></pre></div></div>
+
+<h4 id="get_generalized_index_length"><code class="language-plaintext highlighter-rouge">get_generalized_index_length</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_generalized_index_length</span><span class="p">(</span><span class="n">index</span><span class="p">:</span> <span class="n">GeneralizedIndex</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="s">"""
+    Return the length of a path represented by a generalized index.
+    """</span>
+    <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">log2</span><span class="p">(</span><span class="n">index</span><span class="p">))</span>
+</code></pre></div></div>
+
+<h4 id="get_generalized_index_bit"><code class="language-plaintext highlighter-rouge">get_generalized_index_bit</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_generalized_index_bit</span><span class="p">(</span><span class="n">index</span><span class="p">:</span> <span class="n">GeneralizedIndex</span><span class="p">,</span> <span class="n">position</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="s">"""
+    Return the given bit of a generalized index.
+    """</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">index</span> <span class="o">&amp;</span> <span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">position</span><span class="p">))</span> <span class="o">&gt;</span> <span class="mi">0</span>
+</code></pre></div></div>
+
+<h4 id="generalized_index_sibling"><code class="language-plaintext highlighter-rouge">generalized_index_sibling</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">generalized_index_sibling</span><span class="p">(</span><span class="n">index</span><span class="p">:</span> <span class="n">GeneralizedIndex</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">GeneralizedIndex</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">GeneralizedIndex</span><span class="p">(</span><span class="n">index</span> <span class="o">^</span> <span class="mi">1</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="generalized_index_child"><code class="language-plaintext highlighter-rouge">generalized_index_child</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">generalized_index_child</span><span class="p">(</span><span class="n">index</span><span class="p">:</span> <span class="n">GeneralizedIndex</span><span class="p">,</span> <span class="n">right_side</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">GeneralizedIndex</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">GeneralizedIndex</span><span class="p">(</span><span class="n">index</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">+</span> <span class="n">right_side</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="generalized_index_parent"><code class="language-plaintext highlighter-rouge">generalized_index_parent</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">generalized_index_parent</span><span class="p">(</span><span class="n">index</span><span class="p">:</span> <span class="n">GeneralizedIndex</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">GeneralizedIndex</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">GeneralizedIndex</span><span class="p">(</span><span class="n">index</span> <span class="o">//</span> <span class="mi">2</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h2 id="merkle-multiproofs">Merkle multiproofs</h2>
+
+<p>We define a Merkle multiproof as a minimal subset of nodes in a Merkle tree needed to fully authenticate that a set of nodes actually are part of a Merkle tree with some specified root, at a particular set of generalized indices. For example, here is the Merkle multiproof for positions 0, 1, 6 in an 8-node Merkle tree (i.e. generalized indices 8, 9, 14):</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>       .
+   .       .
+ .   *   *   .
+x x . . . . x *
+</code></pre></div></div>
+
+<p>. are unused nodes, * are used nodes, x are the values we are trying to prove. Notice how despite being a multiproof for 3 values, it requires only 3 auxiliary nodes, only one node more than would be required to prove a single value. Normally the efficiency gains are not quite that extreme, but the savings relative to individual Merkle proofs are still significant. As a rule of thumb, a multiproof for k nodes at the same level of an n-node tree has size <code class="language-plaintext highlighter-rouge">k * (n/k + log(n/k))</code>.</p>
+
+<p>First, we provide a method for computing the generalized indices of the auxiliary tree nodes that a proof of a given set of generalized indices will require:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_branch_indices</span><span class="p">(</span><span class="n">tree_index</span><span class="p">:</span> <span class="n">GeneralizedIndex</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">GeneralizedIndex</span><span class="p">]:</span>
+    <span class="s">"""
+    Get the generalized indices of the sister chunks along the path from the chunk with the
+    given tree index to the root.
+    """</span>
+    <span class="n">o</span> <span class="o">=</span> <span class="p">[</span><span class="n">generalized_index_sibling</span><span class="p">(</span><span class="n">tree_index</span><span class="p">)]</span>
+    <span class="k">while</span> <span class="n">o</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">o</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">generalized_index_sibling</span><span class="p">(</span><span class="n">generalized_index_parent</span><span class="p">(</span><span class="n">o</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])))</span>
+    <span class="k">return</span> <span class="n">o</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_path_indices</span><span class="p">(</span><span class="n">tree_index</span><span class="p">:</span> <span class="n">GeneralizedIndex</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">GeneralizedIndex</span><span class="p">]:</span>
+    <span class="s">"""
+    Get the generalized indices of the chunks along the path from the chunk with the
+    given tree index to the root.
+    """</span>
+    <span class="n">o</span> <span class="o">=</span> <span class="p">[</span><span class="n">tree_index</span><span class="p">]</span>
+    <span class="k">while</span> <span class="n">o</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">o</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">generalized_index_parent</span><span class="p">(</span><span class="n">o</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]))</span>
+    <span class="k">return</span> <span class="n">o</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_helper_indices</span><span class="p">(</span><span class="n">indices</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">GeneralizedIndex</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">GeneralizedIndex</span><span class="p">]:</span>
+    <span class="s">"""
+    Get the generalized indices of all "extra" chunks in the tree needed to prove the chunks with the given
+    generalized indices. Note that the decreasing order is chosen deliberately to ensure equivalence to the
+    order of hashes in a regular single-item Merkle proof in the single-item case.
+    """</span>
+    <span class="n">all_helper_indices</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="n">GeneralizedIndex</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="n">all_path_indices</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="n">GeneralizedIndex</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">indices</span><span class="p">:</span>
+        <span class="n">all_helper_indices</span> <span class="o">=</span> <span class="n">all_helper_indices</span><span class="p">.</span><span class="n">union</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">get_branch_indices</span><span class="p">(</span><span class="n">index</span><span class="p">)))</span>
+        <span class="n">all_path_indices</span> <span class="o">=</span> <span class="n">all_path_indices</span><span class="p">.</span><span class="n">union</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">get_path_indices</span><span class="p">(</span><span class="n">index</span><span class="p">)))</span>
+
+    <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">all_helper_indices</span><span class="p">.</span><span class="n">difference</span><span class="p">(</span><span class="n">all_path_indices</span><span class="p">),</span> <span class="n">reverse</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Now we provide the Merkle proof verification functions. First, for single item proofs:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">calculate_merkle_root</span><span class="p">(</span><span class="n">leaf</span><span class="p">:</span> <span class="n">Bytes32</span><span class="p">,</span> <span class="n">proof</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Bytes32</span><span class="p">],</span> <span class="n">index</span><span class="p">:</span> <span class="n">GeneralizedIndex</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Root</span><span class="p">:</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">proof</span><span class="p">)</span> <span class="o">==</span> <span class="n">get_generalized_index_length</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">h</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">proof</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">get_generalized_index_bit</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
+            <span class="n">leaf</span> <span class="o">=</span> <span class="nb">hash</span><span class="p">(</span><span class="n">h</span> <span class="o">+</span> <span class="n">leaf</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">leaf</span> <span class="o">=</span> <span class="nb">hash</span><span class="p">(</span><span class="n">leaf</span> <span class="o">+</span> <span class="n">h</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">leaf</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">verify_merkle_proof</span><span class="p">(</span><span class="n">leaf</span><span class="p">:</span> <span class="n">Bytes32</span><span class="p">,</span> <span class="n">proof</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Bytes32</span><span class="p">],</span> <span class="n">index</span><span class="p">:</span> <span class="n">GeneralizedIndex</span><span class="p">,</span> <span class="n">root</span><span class="p">:</span> <span class="n">Root</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">calculate_merkle_root</span><span class="p">(</span><span class="n">leaf</span><span class="p">,</span> <span class="n">proof</span><span class="p">,</span> <span class="n">index</span><span class="p">)</span> <span class="o">==</span> <span class="n">root</span>
+</code></pre></div></div>
+
+<p>Now for multi-item proofs:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">calculate_multi_merkle_root</span><span class="p">(</span><span class="n">leaves</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Bytes32</span><span class="p">],</span>
+                                <span class="n">proof</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Bytes32</span><span class="p">],</span>
+                                <span class="n">indices</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">GeneralizedIndex</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Root</span><span class="p">:</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">leaves</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span>
+    <span class="n">helper_indices</span> <span class="o">=</span> <span class="n">get_helper_indices</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">proof</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">helper_indices</span><span class="p">)</span>
+    <span class="n">objects</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="o">**</span><span class="p">{</span><span class="n">index</span><span class="p">:</span> <span class="n">node</span> <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">node</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">indices</span><span class="p">,</span> <span class="n">leaves</span><span class="p">)},</span>
+        <span class="o">**</span><span class="p">{</span><span class="n">index</span><span class="p">:</span> <span class="n">node</span> <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">node</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">helper_indices</span><span class="p">,</span> <span class="n">proof</span><span class="p">)}</span>
+    <span class="p">}</span>
+    <span class="n">keys</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">objects</span><span class="p">.</span><span class="n">keys</span><span class="p">(),</span> <span class="n">reverse</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+    <span class="n">pos</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">while</span> <span class="n">pos</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">keys</span><span class="p">):</span>
+        <span class="n">k</span> <span class="o">=</span> <span class="n">keys</span><span class="p">[</span><span class="n">pos</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">objects</span> <span class="ow">and</span> <span class="n">k</span> <span class="o">^</span> <span class="mi">1</span> <span class="ow">in</span> <span class="n">objects</span> <span class="ow">and</span> <span class="n">k</span> <span class="o">//</span> <span class="mi">2</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">objects</span><span class="p">:</span>
+            <span class="n">objects</span><span class="p">[</span><span class="n">GeneralizedIndex</span><span class="p">(</span><span class="n">k</span> <span class="o">//</span> <span class="mi">2</span><span class="p">)]</span> <span class="o">=</span> <span class="nb">hash</span><span class="p">(</span>
+                <span class="n">objects</span><span class="p">[</span><span class="n">GeneralizedIndex</span><span class="p">((</span><span class="n">k</span> <span class="o">|</span> <span class="mi">1</span><span class="p">)</span> <span class="o">^</span> <span class="mi">1</span><span class="p">)]</span> <span class="o">+</span>
+                <span class="n">objects</span><span class="p">[</span><span class="n">GeneralizedIndex</span><span class="p">(</span><span class="n">k</span> <span class="o">|</span> <span class="mi">1</span><span class="p">)]</span>
+            <span class="p">)</span>
+            <span class="n">keys</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">GeneralizedIndex</span><span class="p">(</span><span class="n">k</span> <span class="o">//</span> <span class="mi">2</span><span class="p">))</span>
+        <span class="n">pos</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="k">return</span> <span class="n">objects</span><span class="p">[</span><span class="n">GeneralizedIndex</span><span class="p">(</span><span class="mi">1</span><span class="p">)]</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">verify_merkle_multiproof</span><span class="p">(</span><span class="n">leaves</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Bytes32</span><span class="p">],</span>
+                             <span class="n">proof</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Bytes32</span><span class="p">],</span>
+                             <span class="n">indices</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">GeneralizedIndex</span><span class="p">],</span>
+                             <span class="n">root</span><span class="p">:</span> <span class="n">Root</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">calculate_multi_merkle_root</span><span class="p">(</span><span class="n">leaves</span><span class="p">,</span> <span class="n">proof</span><span class="p">,</span> <span class="n">indices</span><span class="p">)</span> <span class="o">==</span> <span class="n">root</span>
+</code></pre></div></div>
+
+<p>Note that the single-item proof is a special case of a multi-item proof; a valid single-item proof verifies correctly when put into the multi-item verification function (making the natural trivial changes to input arguments, <code class="language-plaintext highlighter-rouge">index -&gt; [index]</code> and <code class="language-plaintext highlighter-rouge">leaf -&gt; [leaf]</code>). Note also that <code class="language-plaintext highlighter-rouge">calculate_merkle_root</code> and <code class="language-plaintext highlighter-rouge">calculate_multi_merkle_root</code> can be used independently to compute the new Merkle root of a proof with leaves updated.</p>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

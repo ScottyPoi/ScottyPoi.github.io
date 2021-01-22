@@ -1,0 +1,60 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="sanity-slots-testing">Sanity slots testing</h1>
+
+<p>Sanity tests to cover a series of one or more empty-slot transitions being processed, aiming to cover common changes.</p>
+
+<h2 id="test-case-format">Test case format</h2>
+
+<h3 id="metayaml"><code class="language-plaintext highlighter-rouge">meta.yaml</code></h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">description</span><span class="pi">:</span> <span class="s">string    -- Optional. Description of test case, purely for debugging purposes.</span>
+<span class="na">bls_setting</span><span class="pi">:</span> <span class="s">int       -- see general test-format spec.</span>
+</code></pre></div></div>
+
+<h3 id="preyaml"><code class="language-plaintext highlighter-rouge">pre.yaml</code></h3>
+
+<p>A YAML-encoded <code class="language-plaintext highlighter-rouge">BeaconState</code>, the state before running the transitions.</p>
+
+<p>Also available as <code class="language-plaintext highlighter-rouge">pre.ssz</code>.</p>
+
+<h3 id="slotsyaml"><code class="language-plaintext highlighter-rouge">slots.yaml</code></h3>
+
+<p>An integer. The amount of slots to process (i.e. the difference in slots between pre and post), always a positive number.</p>
+
+<h3 id="postyaml"><code class="language-plaintext highlighter-rouge">post.yaml</code></h3>
+
+<p>A YAML-encoded <code class="language-plaintext highlighter-rouge">BeaconState</code>, the state after applying the transitions.</p>
+
+<p>Also available as <code class="language-plaintext highlighter-rouge">post.ssz</code>.</p>
+
+<h3 id="processing">Processing</h3>
+
+<p>The transition with pure time, no blocks, is known as <code class="language-plaintext highlighter-rouge">process_slots(state, slot)</code> in the spec.
+This runs state-caching (pure slot transition) and epoch processing (every E slots).</p>
+
+<p>To process the data, call <code class="language-plaintext highlighter-rouge">process_slots(pre, pre.slot + N)</code>.</p>
+
+<h2 id="condition">Condition</h2>
+
+<p>The resulting state should match the expected <code class="language-plaintext highlighter-rouge">post</code> state.</p>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

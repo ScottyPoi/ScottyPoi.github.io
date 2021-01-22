@@ -1,0 +1,151 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="ethereum-20-phase-1--from-phase-0-to-phase-1">Ethereum 2.0 Phase 1 – From Phase 0 to Phase 1</h1>
+
+<p><strong>Notice</strong>: This document is a work-in-progress for researchers and implementers.</p>
+
+<h2 id="table-of-contents">Table of contents</h2>
+
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+<ul>
+  <li><a href="#introduction">Introduction</a></li>
+  <li><a href="#configuration">Configuration</a></li>
+  <li><a href="#fork-to-phase-1">Fork to Phase 1</a>
+    <ul>
+      <li><a href="#fork-trigger">Fork trigger</a></li>
+      <li><a href="#upgrading-the-state">Upgrading the state</a></li>
+    </ul>
+  </li>
+</ul>
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+<h2 id="introduction">Introduction</h2>
+
+<p>This document describes the process of moving from Phase 0 to Phase 1 of Ethereum 2.0.</p>
+
+<h2 id="configuration">Configuration</h2>
+
+<p>Warning: this configuration is not definitive.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">PHASE_1_FORK_VERSION</code></td>
+      <td><code class="language-plaintext highlighter-rouge">Version('0x01000000')</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">PHASE_1_FORK_SLOT</code></td>
+      <td><code class="language-plaintext highlighter-rouge">Slot(0)</code> <strong>TBD</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="fork-to-phase-1">Fork to Phase 1</h2>
+
+<h3 id="fork-trigger">Fork trigger</h3>
+
+<p>TBD. Social consensus, along with state conditions such as epoch boundary, finality, deposits, active validator count, etc. may be part of the decision process to trigger the fork. For now we assume the condition will be triggered at slot <code class="language-plaintext highlighter-rouge">PHASE_1_FORK_SLOT</code>, where <code class="language-plaintext highlighter-rouge">PHASE_1_FORK_SLOT % SLOTS_PER_EPOCH == 0</code>.</p>
+
+<h3 id="upgrading-the-state">Upgrading the state</h3>
+
+<p>After <code class="language-plaintext highlighter-rouge">process_slots</code> of Phase 0 finishes, if <code class="language-plaintext highlighter-rouge">state.slot == PHASE_1_FORK_SLOT</code>, an irregular state change is made to upgrade to Phase 1.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">upgrade_to_phase1</span><span class="p">(</span><span class="n">pre</span><span class="p">:</span> <span class="n">phase0</span><span class="p">.</span><span class="n">BeaconState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BeaconState</span><span class="p">:</span>
+    <span class="n">epoch</span> <span class="o">=</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">pre</span><span class="p">)</span>
+    <span class="n">post</span> <span class="o">=</span> <span class="n">BeaconState</span><span class="p">(</span>
+        <span class="n">genesis_time</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">genesis_time</span><span class="p">,</span>
+        <span class="n">slot</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">slot</span><span class="p">,</span>
+        <span class="n">fork</span><span class="o">=</span><span class="n">Fork</span><span class="p">(</span>
+            <span class="n">previous_version</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">fork</span><span class="p">.</span><span class="n">current_version</span><span class="p">,</span>
+            <span class="n">current_version</span><span class="o">=</span><span class="n">PHASE_1_FORK_VERSION</span><span class="p">,</span>
+            <span class="n">epoch</span><span class="o">=</span><span class="n">epoch</span><span class="p">,</span>
+        <span class="p">),</span>
+        <span class="c1"># History
+</span>        <span class="n">latest_block_header</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">latest_block_header</span><span class="p">,</span>
+        <span class="n">block_roots</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">block_roots</span><span class="p">,</span>
+        <span class="n">state_roots</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">state_roots</span><span class="p">,</span>
+        <span class="n">historical_roots</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">historical_roots</span><span class="p">,</span>
+        <span class="c1"># Eth1
+</span>        <span class="n">eth1_data</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">eth1_data</span><span class="p">,</span>
+        <span class="n">eth1_data_votes</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">eth1_data_votes</span><span class="p">,</span>
+        <span class="n">eth1_deposit_index</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">eth1_deposit_index</span><span class="p">,</span>
+        <span class="c1"># Registry
+</span>        <span class="n">validators</span><span class="o">=</span><span class="n">List</span><span class="p">[</span><span class="n">Validator</span><span class="p">,</span> <span class="n">VALIDATOR_REGISTRY_LIMIT</span><span class="p">](</span>
+            <span class="n">Validator</span><span class="p">(</span>
+                <span class="n">pubkey</span><span class="o">=</span><span class="n">phase0_validator</span><span class="p">.</span><span class="n">pubkey</span><span class="p">,</span>
+                <span class="n">withdrawal_credentials</span><span class="o">=</span><span class="n">phase0_validator</span><span class="p">.</span><span class="n">withdrawal_credentials</span><span class="p">,</span>
+                <span class="n">effective_balance</span><span class="o">=</span><span class="n">phase0_validator</span><span class="p">.</span><span class="n">effective_balance</span><span class="p">,</span>
+                <span class="n">slashed</span><span class="o">=</span><span class="n">phase0_validator</span><span class="p">.</span><span class="n">slashed</span><span class="p">,</span>
+                <span class="n">activation_eligibility_epoch</span><span class="o">=</span><span class="n">phase0_validator</span><span class="p">.</span><span class="n">activation_eligibility_epoch</span><span class="p">,</span>
+                <span class="n">activation_epoch</span><span class="o">=</span><span class="n">phase0_validator</span><span class="p">.</span><span class="n">activation_eligibility_epoch</span><span class="p">,</span>
+                <span class="n">exit_epoch</span><span class="o">=</span><span class="n">phase0_validator</span><span class="p">.</span><span class="n">exit_epoch</span><span class="p">,</span>
+                <span class="n">withdrawable_epoch</span><span class="o">=</span><span class="n">phase0_validator</span><span class="p">.</span><span class="n">withdrawable_epoch</span><span class="p">,</span>
+                <span class="n">next_custody_secret_to_reveal</span><span class="o">=</span><span class="n">get_custody_period_for_validator</span><span class="p">(</span><span class="n">ValidatorIndex</span><span class="p">(</span><span class="n">i</span><span class="p">),</span> <span class="n">epoch</span><span class="p">),</span>
+                <span class="n">all_custody_secrets_revealed_epoch</span><span class="o">=</span><span class="n">FAR_FUTURE_EPOCH</span><span class="p">,</span>
+            <span class="p">)</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">phase0_validator</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">pre</span><span class="p">.</span><span class="n">validators</span><span class="p">)</span>
+        <span class="p">),</span>
+        <span class="n">balances</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">balances</span><span class="p">,</span>
+        <span class="c1"># Randomness
+</span>        <span class="n">randao_mixes</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">randao_mixes</span><span class="p">,</span>
+        <span class="c1"># Slashings
+</span>        <span class="n">slashings</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">slashings</span><span class="p">,</span>
+        <span class="c1"># Attestations
+</span>        <span class="c1"># previous_epoch_attestations is cleared on upgrade. 
+</span>        <span class="n">previous_epoch_attestations</span><span class="o">=</span><span class="n">List</span><span class="p">[</span><span class="n">PendingAttestation</span><span class="p">,</span> <span class="n">MAX_ATTESTATIONS</span> <span class="o">*</span> <span class="n">SLOTS_PER_EPOCH</span><span class="p">](),</span>
+        <span class="c1"># empty in pre state, since the upgrade is performed just after an epoch boundary.
+</span>        <span class="n">current_epoch_attestations</span><span class="o">=</span><span class="n">List</span><span class="p">[</span><span class="n">PendingAttestation</span><span class="p">,</span> <span class="n">MAX_ATTESTATIONS</span> <span class="o">*</span> <span class="n">SLOTS_PER_EPOCH</span><span class="p">](),</span>
+        <span class="c1"># Finality
+</span>        <span class="n">justification_bits</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">justification_bits</span><span class="p">,</span>
+        <span class="n">previous_justified_checkpoint</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">previous_justified_checkpoint</span><span class="p">,</span>
+        <span class="n">current_justified_checkpoint</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">current_justified_checkpoint</span><span class="p">,</span>
+        <span class="n">finalized_checkpoint</span><span class="o">=</span><span class="n">pre</span><span class="p">.</span><span class="n">finalized_checkpoint</span><span class="p">,</span>
+        <span class="c1"># Phase 1
+</span>        <span class="n">current_epoch_start_shard</span><span class="o">=</span><span class="n">Shard</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+        <span class="n">shard_states</span><span class="o">=</span><span class="n">List</span><span class="p">[</span><span class="n">ShardState</span><span class="p">,</span> <span class="n">MAX_SHARDS</span><span class="p">](</span>
+            <span class="n">ShardState</span><span class="p">(</span>
+                <span class="n">slot</span><span class="o">=</span><span class="n">compute_previous_slot</span><span class="p">(</span><span class="n">pre</span><span class="p">.</span><span class="n">slot</span><span class="p">),</span>
+                <span class="n">gasprice</span><span class="o">=</span><span class="n">MIN_GASPRICE</span><span class="p">,</span>
+                <span class="n">latest_block_root</span><span class="o">=</span><span class="n">Root</span><span class="p">(),</span>
+            <span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">INITIAL_ACTIVE_SHARDS</span><span class="p">)</span>
+        <span class="p">),</span>
+        <span class="n">online_countdown</span><span class="o">=</span><span class="p">[</span><span class="n">ONLINE_PERIOD</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">pre</span><span class="p">.</span><span class="n">validators</span><span class="p">),</span>  <span class="c1"># all online
+</span>        <span class="n">current_light_committee</span><span class="o">=</span><span class="n">CompactCommittee</span><span class="p">(),</span>  <span class="c1"># computed after state creation
+</span>        <span class="n">next_light_committee</span><span class="o">=</span><span class="n">CompactCommittee</span><span class="p">(),</span>
+        <span class="c1"># Custody game
+</span>        <span class="n">exposed_derived_secrets</span><span class="o">=</span><span class="p">[()]</span> <span class="o">*</span> <span class="n">EARLY_DERIVED_SECRET_PENALTY_MAX_FUTURE_EPOCHS</span><span class="p">,</span>
+        <span class="c1"># exposed_derived_secrets will fully default to zeroes
+</span>    <span class="p">)</span>
+    <span class="n">next_epoch</span> <span class="o">=</span> <span class="n">Epoch</span><span class="p">(</span><span class="n">epoch</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">post</span><span class="p">.</span><span class="n">current_light_committee</span> <span class="o">=</span> <span class="n">committee_to_compact_committee</span><span class="p">(</span><span class="n">post</span><span class="p">,</span> <span class="n">get_light_client_committee</span><span class="p">(</span><span class="n">post</span><span class="p">,</span> <span class="n">epoch</span><span class="p">))</span>
+    <span class="n">post</span><span class="p">.</span><span class="n">next_light_committee</span> <span class="o">=</span> <span class="n">committee_to_compact_committee</span><span class="p">(</span><span class="n">post</span><span class="p">,</span> <span class="n">get_light_client_committee</span><span class="p">(</span><span class="n">post</span><span class="p">,</span> <span class="n">next_epoch</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">post</span>
+</code></pre></div></div>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

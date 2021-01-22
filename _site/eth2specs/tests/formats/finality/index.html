@@ -1,0 +1,64 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="finality-tests">Finality tests</h1>
+
+<p>The aim of the tests for the finality rules.</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">finality</code>: transitions triggered by one or more blocks.</li>
+</ul>
+
+<h2 id="test-case-format">Test case format</h2>
+
+<h3 id="metayaml"><code class="language-plaintext highlighter-rouge">meta.yaml</code></h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">description</span><span class="pi">:</span> <span class="s">string    -- Optional. Description of test case, purely for debugging purposes.</span>
+<span class="na">bls_setting</span><span class="pi">:</span> <span class="s">int       -- see general test-format spec.</span>
+<span class="na">blocks_count</span><span class="pi">:</span> <span class="s">int      -- the number of blocks processed in this test.</span>
+</code></pre></div></div>
+
+<h3 id="preyaml"><code class="language-plaintext highlighter-rouge">pre.yaml</code></h3>
+
+<p>A YAML-encoded <code class="language-plaintext highlighter-rouge">BeaconState</code>, the state before running the block transitions.</p>
+
+<p>Also available as <code class="language-plaintext highlighter-rouge">pre.ssz</code>.</p>
+
+<h3 id="blocks_indexyaml"><code class="language-plaintext highlighter-rouge">blocks_&lt;index&gt;.yaml</code></h3>
+
+<p>A series of files, with <code class="language-plaintext highlighter-rouge">&lt;index&gt;</code> in range <code class="language-plaintext highlighter-rouge">[0, blocks_count)</code>. Blocks need to be processed in order,
+ following the main transition function (i.e. process slot and epoch transitions in between blocks as normal)</p>
+
+<p>Each file is a YAML-encoded <code class="language-plaintext highlighter-rouge">SignedBeaconBlock</code>.</p>
+
+<p>Each block is also available as <code class="language-plaintext highlighter-rouge">blocks_&lt;index&gt;.ssz</code></p>
+
+<h3 id="postyaml"><code class="language-plaintext highlighter-rouge">post.yaml</code></h3>
+
+<p>A YAML-encoded <code class="language-plaintext highlighter-rouge">BeaconState</code>, the state after applying the block transitions.</p>
+
+<p>Also available as <code class="language-plaintext highlighter-rouge">post.ssz</code>.</p>
+
+<h2 id="condition">Condition</h2>
+
+<p>The resulting state should match the expected <code class="language-plaintext highlighter-rouge">post</code> state, or if the <code class="language-plaintext highlighter-rouge">post</code> state is left blank,
+ the handler should reject the series of blocks as invalid.</p>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

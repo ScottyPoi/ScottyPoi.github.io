@@ -1,0 +1,718 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="ethereum-20-phase-1--custody-game">Ethereum 2.0 Phase 1 – Custody Game</h1>
+
+<p><strong>Notice</strong>: This document is a work-in-progress for researchers and implementers.</p>
+
+<h2 id="table-of-contents">Table of contents</h2>
+
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+<ul>
+  <li><a href="#introduction">Introduction</a></li>
+  <li><a href="#constants">Constants</a>
+    <ul>
+      <li><a href="#misc">Misc</a></li>
+    </ul>
+  </li>
+  <li><a href="#configuration">Configuration</a>
+    <ul>
+      <li><a href="#time-parameters">Time parameters</a></li>
+      <li><a href="#max-operations-per-block">Max operations per block</a></li>
+      <li><a href="#reward-and-penalty-quotients">Reward and penalty quotients</a></li>
+    </ul>
+  </li>
+  <li><a href="#data-structures">Data structures</a>
+    <ul>
+      <li><a href="#new-beacon-chain-operations">New Beacon Chain operations</a>
+        <ul>
+          <li><a href="#custodychunkchallenge"><code class="language-plaintext highlighter-rouge">CustodyChunkChallenge</code></a></li>
+          <li><a href="#custodychunkchallengerecord"><code class="language-plaintext highlighter-rouge">CustodyChunkChallengeRecord</code></a></li>
+          <li><a href="#custodychunkresponse"><code class="language-plaintext highlighter-rouge">CustodyChunkResponse</code></a></li>
+          <li><a href="#custodyslashing"><code class="language-plaintext highlighter-rouge">CustodySlashing</code></a></li>
+          <li><a href="#signedcustodyslashing"><code class="language-plaintext highlighter-rouge">SignedCustodySlashing</code></a></li>
+          <li><a href="#custodykeyreveal"><code class="language-plaintext highlighter-rouge">CustodyKeyReveal</code></a></li>
+          <li><a href="#earlyderivedsecretreveal"><code class="language-plaintext highlighter-rouge">EarlyDerivedSecretReveal</code></a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li><a href="#helpers">Helpers</a>
+    <ul>
+      <li><a href="#replace_empty_or_append"><code class="language-plaintext highlighter-rouge">replace_empty_or_append</code></a></li>
+      <li><a href="#legendre_bit"><code class="language-plaintext highlighter-rouge">legendre_bit</code></a></li>
+      <li><a href="#get_custody_atoms"><code class="language-plaintext highlighter-rouge">get_custody_atoms</code></a></li>
+      <li><a href="#get_custody_secrets"><code class="language-plaintext highlighter-rouge">get_custody_secrets</code></a></li>
+      <li><a href="#universal_hash_function"><code class="language-plaintext highlighter-rouge">universal_hash_function</code></a></li>
+      <li><a href="#compute_custody_bit"><code class="language-plaintext highlighter-rouge">compute_custody_bit</code></a></li>
+      <li><a href="#get_randao_epoch_for_custody_period"><code class="language-plaintext highlighter-rouge">get_randao_epoch_for_custody_period</code></a></li>
+      <li><a href="#get_custody_period_for_validator"><code class="language-plaintext highlighter-rouge">get_custody_period_for_validator</code></a></li>
+    </ul>
+  </li>
+  <li><a href="#per-block-processing">Per-block processing</a>
+    <ul>
+      <li><a href="#custody-game-operations">Custody Game Operations</a>
+        <ul>
+          <li><a href="#chunk-challenges">Chunk challenges</a></li>
+          <li><a href="#custody-chunk-response">Custody chunk response</a></li>
+          <li><a href="#custody-key-reveals">Custody key reveals</a></li>
+          <li><a href="#early-derived-secret-reveals">Early derived secret reveals</a></li>
+          <li><a href="#custody-slashings">Custody Slashings</a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li><a href="#per-epoch-processing">Per-epoch processing</a>
+    <ul>
+      <li><a href="#handling-of-reveal-deadlines">Handling of reveal deadlines</a></li>
+      <li><a href="#final-updates">Final updates</a></li>
+    </ul>
+  </li>
+</ul>
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+<h2 id="introduction">Introduction</h2>
+
+<p>This document details the beacon chain additions and changes in Phase 1 of Ethereum 2.0 to support the shard data custody game, building upon the <a href="/eth2specs/specs/phase0/beacon-chain.html">Phase 0</a> specification.</p>
+
+<h2 id="constants">Constants</h2>
+
+<h3 id="misc">Misc</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+      <th>Unit</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">CUSTODY_PRIME</code></td>
+      <td><code class="language-plaintext highlighter-rouge">int(2 ** 256 - 189)</code></td>
+      <td>-</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">CUSTODY_SECRETS</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(3)</code></td>
+      <td>-</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">BYTES_PER_CUSTODY_ATOM</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(32)</code></td>
+      <td>bytes</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">CUSTODY_PROBABILITY_EXPONENT</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(10)</code></td>
+      <td>-</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="configuration">Configuration</h2>
+
+<h3 id="time-parameters">Time parameters</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+      <th style="text-align: center">Unit</th>
+      <th style="text-align: center">Duration</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">RANDAO_PENALTY_EPOCHS</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**1)</code> (= 2)</td>
+      <td style="text-align: center">epochs</td>
+      <td style="text-align: center">12.8 minutes</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">EARLY_DERIVED_SECRET_PENALTY_MAX_FUTURE_EPOCHS</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**15)</code> (= 32,768)</td>
+      <td style="text-align: center">epochs</td>
+      <td style="text-align: center">~146 days</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">EPOCHS_PER_CUSTODY_PERIOD</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**14)</code> (= 16,384)</td>
+      <td style="text-align: center">epochs</td>
+      <td style="text-align: center">~73 days</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">CUSTODY_PERIOD_TO_RANDAO_PADDING</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**11)</code> (= 2,048)</td>
+      <td style="text-align: center">epochs</td>
+      <td style="text-align: center">~9 days</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">MAX_CHUNK_CHALLENGE_DELAY</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**15)</code> (= 32,768)</td>
+      <td style="text-align: center">epochs</td>
+      <td style="text-align: center">~146 days</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="max-operations-per-block">Max operations per block</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">MAX_CUSTODY_CHUNK_CHALLENGE_RECORDS</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**20)</code> (= 1,048,576)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">MAX_CUSTODY_KEY_REVEALS</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**8)</code> (= 256)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">MAX_EARLY_DERIVED_SECRET_REVEALS</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**0)</code> (= 1)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">MAX_CUSTODY_CHUNK_CHALLENGES</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**2)</code> (= 4)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">MAX_CUSTODY_CHUNK_CHALLENGE_RESPONSES</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**4)</code> (= 16)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">MAX_CUSTODY_SLASHINGS</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**0)</code> (= 1)</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="reward-and-penalty-quotients">Reward and penalty quotients</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">EARLY_DERIVED_SECRET_REVEAL_SLOT_REWARD_MULTIPLE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**1)</code> (= 2)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">MINOR_REWARD_QUOTIENT</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**8)</code> (= 256)</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="data-structures">Data structures</h2>
+
+<h3 id="new-beacon-chain-operations">New Beacon Chain operations</h3>
+
+<h4 id="custodychunkchallenge"><code class="language-plaintext highlighter-rouge">CustodyChunkChallenge</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">CustodyChunkChallenge</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">responder_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span>
+    <span class="n">shard_transition</span><span class="p">:</span> <span class="n">ShardTransition</span>
+    <span class="n">attestation</span><span class="p">:</span> <span class="n">Attestation</span>
+    <span class="n">data_index</span><span class="p">:</span> <span class="n">uint64</span>
+    <span class="n">chunk_index</span><span class="p">:</span> <span class="n">uint64</span>
+</code></pre></div></div>
+
+<h4 id="custodychunkchallengerecord"><code class="language-plaintext highlighter-rouge">CustodyChunkChallengeRecord</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">CustodyChunkChallengeRecord</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">challenge_index</span><span class="p">:</span> <span class="n">uint64</span>
+    <span class="n">challenger_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span>
+    <span class="n">responder_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span>
+    <span class="n">inclusion_epoch</span><span class="p">:</span> <span class="n">Epoch</span>
+    <span class="n">data_root</span><span class="p">:</span> <span class="n">Root</span>
+    <span class="n">chunk_index</span><span class="p">:</span> <span class="n">uint64</span>
+</code></pre></div></div>
+
+<h4 id="custodychunkresponse"><code class="language-plaintext highlighter-rouge">CustodyChunkResponse</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">CustodyChunkResponse</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">challenge_index</span><span class="p">:</span> <span class="n">uint64</span>
+    <span class="n">chunk_index</span><span class="p">:</span> <span class="n">uint64</span>
+    <span class="n">chunk</span><span class="p">:</span> <span class="n">ByteVector</span><span class="p">[</span><span class="n">BYTES_PER_CUSTODY_CHUNK</span><span class="p">]</span>
+    <span class="n">branch</span><span class="p">:</span> <span class="n">Vector</span><span class="p">[</span><span class="n">Root</span><span class="p">,</span> <span class="n">CUSTODY_RESPONSE_DEPTH</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span>
+</code></pre></div></div>
+
+<h4 id="custodyslashing"><code class="language-plaintext highlighter-rouge">CustodySlashing</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">CustodySlashing</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="c1"># (Attestation.data.shard_transition_root as ShardTransition).shard_data_roots[data_index] is the root of the data.
+</span>    <span class="n">data_index</span><span class="p">:</span> <span class="n">uint64</span>
+    <span class="n">malefactor_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span>
+    <span class="n">malefactor_secret</span><span class="p">:</span> <span class="n">BLSSignature</span>
+    <span class="n">whistleblower_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span>
+    <span class="n">shard_transition</span><span class="p">:</span> <span class="n">ShardTransition</span>
+    <span class="n">attestation</span><span class="p">:</span> <span class="n">Attestation</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">ByteList</span><span class="p">[</span><span class="n">MAX_SHARD_BLOCK_SIZE</span><span class="p">]</span>
+</code></pre></div></div>
+
+<h4 id="signedcustodyslashing"><code class="language-plaintext highlighter-rouge">SignedCustodySlashing</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">SignedCustodySlashing</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">message</span><span class="p">:</span> <span class="n">CustodySlashing</span>
+    <span class="n">signature</span><span class="p">:</span> <span class="n">BLSSignature</span>
+</code></pre></div></div>
+
+<h4 id="custodykeyreveal"><code class="language-plaintext highlighter-rouge">CustodyKeyReveal</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">CustodyKeyReveal</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="c1"># Index of the validator whose key is being revealed
+</span>    <span class="n">revealer_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span>
+    <span class="c1"># Reveal (masked signature)
+</span>    <span class="n">reveal</span><span class="p">:</span> <span class="n">BLSSignature</span>
+</code></pre></div></div>
+
+<h4 id="earlyderivedsecretreveal"><code class="language-plaintext highlighter-rouge">EarlyDerivedSecretReveal</code></h4>
+
+<p>Represents an early (punishable) reveal of one of the derived secrets, where derived secrets are RANDAO reveals and custody reveals (both are part of the same domain).</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">EarlyDerivedSecretReveal</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="c1"># Index of the validator whose key is being revealed
+</span>    <span class="n">revealed_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span>
+    <span class="c1"># RANDAO epoch of the key that is being revealed
+</span>    <span class="n">epoch</span><span class="p">:</span> <span class="n">Epoch</span>
+    <span class="c1"># Reveal (masked signature)
+</span>    <span class="n">reveal</span><span class="p">:</span> <span class="n">BLSSignature</span>
+    <span class="c1"># Index of the validator who revealed (whistleblower)
+</span>    <span class="n">masker_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span>
+    <span class="c1"># Mask used to hide the actual reveal signature (prevent reveal from being stolen)
+</span>    <span class="n">mask</span><span class="p">:</span> <span class="n">Bytes32</span>
+</code></pre></div></div>
+
+<h2 id="helpers">Helpers</h2>
+
+<h3 id="replace_empty_or_append"><code class="language-plaintext highlighter-rouge">replace_empty_or_append</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">replace_empty_or_append</span><span class="p">(</span><span class="n">l</span><span class="p">:</span> <span class="n">List</span><span class="p">,</span> <span class="n">new_element</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">l</span><span class="p">)):</span>
+        <span class="k">if</span> <span class="n">l</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="nb">type</span><span class="p">(</span><span class="n">new_element</span><span class="p">)():</span>
+            <span class="n">l</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">new_element</span>
+            <span class="k">return</span> <span class="n">i</span>
+    <span class="n">l</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_element</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">l</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+</code></pre></div></div>
+
+<h3 id="legendre_bit"><code class="language-plaintext highlighter-rouge">legendre_bit</code></h3>
+
+<p>Returns the Legendre symbol <code class="language-plaintext highlighter-rouge">(a/q)</code> normalizes as a bit (i.e. <code class="language-plaintext highlighter-rouge">((a/q) + 1) // 2</code>). In a production implementation, a well-optimized library (e.g. GMP) should be used for this.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">legendre_bit</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">q</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">a</span> <span class="o">&gt;=</span> <span class="n">q</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">legendre_bit</span><span class="p">(</span><span class="n">a</span> <span class="o">%</span> <span class="n">q</span><span class="p">,</span> <span class="n">q</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">a</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">0</span>
+    <span class="k">assert</span><span class="p">(</span><span class="n">q</span> <span class="o">&gt;</span> <span class="n">a</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">q</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">t</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="n">q</span>
+    <span class="k">while</span> <span class="n">a</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">while</span> <span class="n">a</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">a</span> <span class="o">//=</span> <span class="mi">2</span>
+            <span class="n">r</span> <span class="o">=</span> <span class="n">n</span> <span class="o">%</span> <span class="mi">8</span>
+            <span class="k">if</span> <span class="n">r</span> <span class="o">==</span> <span class="mi">3</span> <span class="ow">or</span> <span class="n">r</span> <span class="o">==</span> <span class="mi">5</span><span class="p">:</span>
+                <span class="n">t</span> <span class="o">=</span> <span class="o">-</span><span class="n">t</span>
+        <span class="n">a</span><span class="p">,</span> <span class="n">n</span> <span class="o">=</span> <span class="n">n</span><span class="p">,</span> <span class="n">a</span>
+        <span class="k">if</span> <span class="n">a</span> <span class="o">%</span> <span class="mi">4</span> <span class="o">==</span> <span class="n">n</span> <span class="o">%</span> <span class="mi">4</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="n">t</span> <span class="o">=</span> <span class="o">-</span><span class="n">t</span>
+        <span class="n">a</span> <span class="o">%=</span> <span class="n">n</span>
+    <span class="k">if</span> <span class="n">n</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">t</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">0</span>
+</code></pre></div></div>
+
+<h3 id="get_custody_atoms"><code class="language-plaintext highlighter-rouge">get_custody_atoms</code></h3>
+
+<p>Given one set of data, return the custody atoms: each atom will be combined with one legendre bit.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_custody_atoms</span><span class="p">(</span><span class="n">bytez</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">bytes</span><span class="p">]:</span>
+    <span class="n">length_remainder</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">bytez</span><span class="p">)</span> <span class="o">%</span> <span class="n">BYTES_PER_CUSTODY_ATOM</span>
+    <span class="n">bytez</span> <span class="o">+=</span> <span class="s">b'</span><span class="se">\x00</span><span class="s">'</span> <span class="o">*</span> <span class="p">((</span><span class="n">BYTES_PER_CUSTODY_ATOM</span> <span class="o">-</span> <span class="n">length_remainder</span><span class="p">)</span> <span class="o">%</span> <span class="n">BYTES_PER_CUSTODY_ATOM</span><span class="p">)</span>  <span class="c1"># right-padding
+</span>    <span class="k">return</span> <span class="p">[</span>
+        <span class="n">bytez</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span> <span class="o">+</span> <span class="n">BYTES_PER_CUSTODY_ATOM</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">bytez</span><span class="p">),</span> <span class="n">BYTES_PER_CUSTODY_ATOM</span><span class="p">)</span>
+    <span class="p">]</span>
+</code></pre></div></div>
+
+<h3 id="get_custody_secrets"><code class="language-plaintext highlighter-rouge">get_custody_secrets</code></h3>
+
+<p>Extract the custody secrets from the signature</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_custody_secrets</span><span class="p">(</span><span class="n">key</span><span class="p">:</span> <span class="n">BLSSignature</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+    <span class="n">full_G2_element</span> <span class="o">=</span> <span class="n">bls</span><span class="p">.</span><span class="n">signature_to_G2</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+    <span class="n">signature</span> <span class="o">=</span> <span class="n">full_G2_element</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">coeffs</span>
+    <span class="n">signature_bytes</span> <span class="o">=</span> <span class="s">b""</span><span class="p">.</span><span class="n">join</span><span class="p">(</span><span class="n">x</span><span class="p">.</span><span class="n">to_bytes</span><span class="p">(</span><span class="mi">48</span><span class="p">,</span> <span class="s">"little"</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">signature</span><span class="p">)</span>
+    <span class="n">secrets</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">.</span><span class="n">from_bytes</span><span class="p">(</span><span class="n">signature_bytes</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span> <span class="o">+</span> <span class="n">BYTES_PER_CUSTODY_ATOM</span><span class="p">],</span> <span class="s">"little"</span><span class="p">)</span>
+               <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">signature_bytes</span><span class="p">),</span> <span class="mi">32</span><span class="p">)]</span>
+    <span class="k">return</span> <span class="n">secrets</span>
+</code></pre></div></div>
+
+<h3 id="universal_hash_function"><code class="language-plaintext highlighter-rouge">universal_hash_function</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">universal_hash_function</span><span class="p">(</span><span class="n">data_chunks</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">bytes</span><span class="p">],</span> <span class="n">secrets</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data_chunks</span><span class="p">)</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="nb">sum</span><span class="p">(</span>
+            <span class="n">secrets</span><span class="p">[</span><span class="n">i</span> <span class="o">%</span> <span class="n">CUSTODY_SECRETS</span><span class="p">]</span><span class="o">**</span><span class="n">i</span> <span class="o">*</span> <span class="nb">int</span><span class="p">.</span><span class="n">from_bytes</span><span class="p">(</span><span class="n">atom</span><span class="p">,</span> <span class="s">"little"</span><span class="p">)</span> <span class="o">%</span> <span class="n">CUSTODY_PRIME</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">atom</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">data_chunks</span><span class="p">)</span>
+        <span class="p">)</span> <span class="o">+</span> <span class="n">secrets</span><span class="p">[</span><span class="n">n</span> <span class="o">%</span> <span class="n">CUSTODY_SECRETS</span><span class="p">]</span><span class="o">**</span><span class="n">n</span>
+    <span class="p">)</span> <span class="o">%</span> <span class="n">CUSTODY_PRIME</span>
+</code></pre></div></div>
+
+<h3 id="compute_custody_bit"><code class="language-plaintext highlighter-rouge">compute_custody_bit</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">compute_custody_bit</span><span class="p">(</span><span class="n">key</span><span class="p">:</span> <span class="n">BLSSignature</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">ByteList</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">bit</span><span class="p">:</span>
+    <span class="n">custody_atoms</span> <span class="o">=</span> <span class="n">get_custody_atoms</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="n">secrets</span> <span class="o">=</span> <span class="n">get_custody_secrets</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+    <span class="n">uhf</span> <span class="o">=</span> <span class="n">universal_hash_function</span><span class="p">(</span><span class="n">custody_atoms</span><span class="p">,</span> <span class="n">secrets</span><span class="p">)</span>
+    <span class="n">legendre_bits</span> <span class="o">=</span> <span class="p">[</span><span class="n">legendre_bit</span><span class="p">(</span><span class="n">uhf</span> <span class="o">+</span> <span class="n">secrets</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">i</span><span class="p">,</span> <span class="n">CUSTODY_PRIME</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">CUSTODY_PROBABILITY_EXPONENT</span><span class="p">)]</span>
+    <span class="k">return</span> <span class="n">bit</span><span class="p">(</span><span class="nb">all</span><span class="p">(</span><span class="n">legendre_bits</span><span class="p">))</span>
+</code></pre></div></div>
+
+<h3 id="get_randao_epoch_for_custody_period"><code class="language-plaintext highlighter-rouge">get_randao_epoch_for_custody_period</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_randao_epoch_for_custody_period</span><span class="p">(</span><span class="n">period</span><span class="p">:</span> <span class="n">uint64</span><span class="p">,</span> <span class="n">validator_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Epoch</span><span class="p">:</span>
+    <span class="n">next_period_start</span> <span class="o">=</span> <span class="p">(</span><span class="n">period</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">EPOCHS_PER_CUSTODY_PERIOD</span> <span class="o">-</span> <span class="n">validator_index</span> <span class="o">%</span> <span class="n">EPOCHS_PER_CUSTODY_PERIOD</span>
+    <span class="k">return</span> <span class="n">Epoch</span><span class="p">(</span><span class="n">next_period_start</span> <span class="o">+</span> <span class="n">CUSTODY_PERIOD_TO_RANDAO_PADDING</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="get_custody_period_for_validator"><code class="language-plaintext highlighter-rouge">get_custody_period_for_validator</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_custody_period_for_validator</span><span class="p">(</span><span class="n">validator_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span><span class="p">,</span> <span class="n">epoch</span><span class="p">:</span> <span class="n">Epoch</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">uint64</span><span class="p">:</span>
+    <span class="s">'''
+    Return the reveal period for a given validator.
+    '''</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">epoch</span> <span class="o">+</span> <span class="n">validator_index</span> <span class="o">%</span> <span class="n">EPOCHS_PER_CUSTODY_PERIOD</span><span class="p">)</span> <span class="o">//</span> <span class="n">EPOCHS_PER_CUSTODY_PERIOD</span>
+</code></pre></div></div>
+
+<h2 id="per-block-processing">Per-block processing</h2>
+
+<h3 id="custody-game-operations">Custody Game Operations</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_custody_game_operations</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">body</span><span class="p">:</span> <span class="n">BeaconBlockBody</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">for_ops</span><span class="p">(</span><span class="n">operations</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">BeaconState</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="bp">None</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">operation</span> <span class="ow">in</span> <span class="n">operations</span><span class="p">:</span>
+            <span class="n">fn</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">operation</span><span class="p">)</span>
+
+    <span class="n">for_ops</span><span class="p">(</span><span class="n">body</span><span class="p">.</span><span class="n">chunk_challenges</span><span class="p">,</span> <span class="n">process_chunk_challenge</span><span class="p">)</span>
+    <span class="n">for_ops</span><span class="p">(</span><span class="n">body</span><span class="p">.</span><span class="n">chunk_challenge_responses</span><span class="p">,</span> <span class="n">process_chunk_challenge_response</span><span class="p">)</span>
+    <span class="n">for_ops</span><span class="p">(</span><span class="n">body</span><span class="p">.</span><span class="n">custody_key_reveals</span><span class="p">,</span> <span class="n">process_custody_key_reveal</span><span class="p">)</span>
+    <span class="n">for_ops</span><span class="p">(</span><span class="n">body</span><span class="p">.</span><span class="n">early_derived_secret_reveals</span><span class="p">,</span> <span class="n">process_early_derived_secret_reveal</span><span class="p">)</span>
+    <span class="n">for_ops</span><span class="p">(</span><span class="n">body</span><span class="p">.</span><span class="n">custody_slashings</span><span class="p">,</span> <span class="n">process_custody_slashing</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="chunk-challenges">Chunk challenges</h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_chunk_challenge</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">challenge</span><span class="p">:</span> <span class="n">CustodyChunkChallenge</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="c1"># Verify the attestation
+</span>    <span class="k">assert</span> <span class="n">is_valid_indexed_attestation</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">get_indexed_attestation</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">challenge</span><span class="p">.</span><span class="n">attestation</span><span class="p">))</span>
+    <span class="c1"># Verify it is not too late to challenge the attestation
+</span>    <span class="n">max_attestation_challenge_epoch</span> <span class="o">=</span> <span class="n">Epoch</span><span class="p">(</span><span class="n">challenge</span><span class="p">.</span><span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">target</span><span class="p">.</span><span class="n">epoch</span> <span class="o">+</span> <span class="n">MAX_CHUNK_CHALLENGE_DELAY</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">max_attestation_challenge_epoch</span>
+    <span class="c1"># Verify it is not too late to challenge the responder
+</span>    <span class="n">responder</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">[</span><span class="n">challenge</span><span class="p">.</span><span class="n">responder_index</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">responder</span><span class="p">.</span><span class="n">exit_epoch</span> <span class="o">&lt;</span> <span class="n">FAR_FUTURE_EPOCH</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">responder</span><span class="p">.</span><span class="n">exit_epoch</span> <span class="o">+</span> <span class="n">MAX_CHUNK_CHALLENGE_DELAY</span>
+    <span class="c1"># Verify responder is slashable
+</span>    <span class="k">assert</span> <span class="n">is_slashable_validator</span><span class="p">(</span><span class="n">responder</span><span class="p">,</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+    <span class="c1"># Verify the responder participated in the attestation
+</span>    <span class="n">attesters</span> <span class="o">=</span> <span class="n">get_attesting_indices</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">challenge</span><span class="p">.</span><span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">,</span> <span class="n">challenge</span><span class="p">.</span><span class="n">attestation</span><span class="p">.</span><span class="n">aggregation_bits</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">challenge</span><span class="p">.</span><span class="n">responder_index</span> <span class="ow">in</span> <span class="n">attesters</span>
+    <span class="c1"># Verify shard transition is correctly given
+</span>    <span class="k">assert</span> <span class="n">hash_tree_root</span><span class="p">(</span><span class="n">challenge</span><span class="p">.</span><span class="n">shard_transition</span><span class="p">)</span> <span class="o">==</span> <span class="n">challenge</span><span class="p">.</span><span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">shard_transition_root</span>
+    <span class="n">data_root</span> <span class="o">=</span> <span class="n">challenge</span><span class="p">.</span><span class="n">shard_transition</span><span class="p">.</span><span class="n">shard_data_roots</span><span class="p">[</span><span class="n">challenge</span><span class="p">.</span><span class="n">data_index</span><span class="p">]</span>
+    <span class="c1"># Verify the challenge is not a duplicate
+</span>    <span class="k">for</span> <span class="n">record</span> <span class="ow">in</span> <span class="n">state</span><span class="p">.</span><span class="n">custody_chunk_challenge_records</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="p">(</span>
+            <span class="n">record</span><span class="p">.</span><span class="n">data_root</span> <span class="o">!=</span> <span class="n">data_root</span> <span class="ow">or</span>
+            <span class="n">record</span><span class="p">.</span><span class="n">chunk_index</span> <span class="o">!=</span> <span class="n">challenge</span><span class="p">.</span><span class="n">chunk_index</span>
+        <span class="p">)</span>
+    <span class="c1"># Verify depth
+</span>    <span class="n">shard_block_length</span> <span class="o">=</span> <span class="n">challenge</span><span class="p">.</span><span class="n">shard_transition</span><span class="p">.</span><span class="n">shard_block_lengths</span><span class="p">[</span><span class="n">challenge</span><span class="p">.</span><span class="n">data_index</span><span class="p">]</span>
+    <span class="n">transition_chunks</span> <span class="o">=</span> <span class="p">(</span><span class="n">shard_block_length</span> <span class="o">+</span> <span class="n">BYTES_PER_CUSTODY_CHUNK</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="n">BYTES_PER_CUSTODY_CHUNK</span>
+    <span class="k">assert</span> <span class="n">challenge</span><span class="p">.</span><span class="n">chunk_index</span> <span class="o">&lt;</span> <span class="n">transition_chunks</span>
+    <span class="c1"># Add new chunk challenge record
+</span>    <span class="n">new_record</span> <span class="o">=</span> <span class="n">CustodyChunkChallengeRecord</span><span class="p">(</span>
+        <span class="n">challenge_index</span><span class="o">=</span><span class="n">state</span><span class="p">.</span><span class="n">custody_chunk_challenge_index</span><span class="p">,</span>
+        <span class="n">challenger_index</span><span class="o">=</span><span class="n">get_beacon_proposer_index</span><span class="p">(</span><span class="n">state</span><span class="p">),</span>
+        <span class="n">responder_index</span><span class="o">=</span><span class="n">challenge</span><span class="p">.</span><span class="n">responder_index</span><span class="p">,</span>
+        <span class="n">inclusion_epoch</span><span class="o">=</span><span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">),</span>
+        <span class="n">data_root</span><span class="o">=</span><span class="n">challenge</span><span class="p">.</span><span class="n">shard_transition</span><span class="p">.</span><span class="n">shard_data_roots</span><span class="p">[</span><span class="n">challenge</span><span class="p">.</span><span class="n">data_index</span><span class="p">],</span>
+        <span class="n">chunk_index</span><span class="o">=</span><span class="n">challenge</span><span class="p">.</span><span class="n">chunk_index</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">replace_empty_or_append</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">custody_chunk_challenge_records</span><span class="p">,</span> <span class="n">new_record</span><span class="p">)</span>
+
+    <span class="n">state</span><span class="p">.</span><span class="n">custody_chunk_challenge_index</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="c1"># Postpone responder withdrawability
+</span>    <span class="n">responder</span><span class="p">.</span><span class="n">withdrawable_epoch</span> <span class="o">=</span> <span class="n">FAR_FUTURE_EPOCH</span>
+</code></pre></div></div>
+
+<h4 id="custody-chunk-response">Custody chunk response</h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_chunk_challenge_response</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+                                     <span class="n">response</span><span class="p">:</span> <span class="n">CustodyChunkResponse</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="c1"># Get matching challenge (if any) from records
+</span>    <span class="n">matching_challenges</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">record</span> <span class="k">for</span> <span class="n">record</span> <span class="ow">in</span> <span class="n">state</span><span class="p">.</span><span class="n">custody_chunk_challenge_records</span>
+        <span class="k">if</span> <span class="n">record</span><span class="p">.</span><span class="n">challenge_index</span> <span class="o">==</span> <span class="n">response</span><span class="p">.</span><span class="n">challenge_index</span>
+    <span class="p">]</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">matching_challenges</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span>
+    <span class="n">challenge</span> <span class="o">=</span> <span class="n">matching_challenges</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="c1"># Verify chunk index
+</span>    <span class="k">assert</span> <span class="n">response</span><span class="p">.</span><span class="n">chunk_index</span> <span class="o">==</span> <span class="n">challenge</span><span class="p">.</span><span class="n">chunk_index</span>
+    <span class="c1"># Verify the chunk matches the crosslink data root
+</span>    <span class="k">assert</span> <span class="n">is_valid_merkle_branch</span><span class="p">(</span>
+        <span class="n">leaf</span><span class="o">=</span><span class="n">hash_tree_root</span><span class="p">(</span><span class="n">response</span><span class="p">.</span><span class="n">chunk</span><span class="p">),</span>
+        <span class="n">branch</span><span class="o">=</span><span class="n">response</span><span class="p">.</span><span class="n">branch</span><span class="p">,</span>
+        <span class="n">depth</span><span class="o">=</span><span class="n">CUSTODY_RESPONSE_DEPTH</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>  <span class="c1"># Add 1 for the List length mix-in
+</span>        <span class="n">index</span><span class="o">=</span><span class="n">response</span><span class="p">.</span><span class="n">chunk_index</span><span class="p">,</span>
+        <span class="n">root</span><span class="o">=</span><span class="n">challenge</span><span class="p">.</span><span class="n">data_root</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="c1"># Clear the challenge
+</span>    <span class="n">index_in_records</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">custody_chunk_challenge_records</span><span class="p">.</span><span class="n">index</span><span class="p">(</span><span class="n">challenge</span><span class="p">)</span>
+    <span class="n">state</span><span class="p">.</span><span class="n">custody_chunk_challenge_records</span><span class="p">[</span><span class="n">index_in_records</span><span class="p">]</span> <span class="o">=</span> <span class="n">CustodyChunkChallengeRecord</span><span class="p">()</span>
+    <span class="c1"># Reward the proposer
+</span>    <span class="n">proposer_index</span> <span class="o">=</span> <span class="n">get_beacon_proposer_index</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="n">increase_balance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">proposer_index</span><span class="p">,</span> <span class="n">Gwei</span><span class="p">(</span><span class="n">get_base_reward</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">proposer_index</span><span class="p">)</span> <span class="o">//</span> <span class="n">MINOR_REWARD_QUOTIENT</span><span class="p">))</span>
+</code></pre></div></div>
+
+<h4 id="custody-key-reveals">Custody key reveals</h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_custody_key_reveal</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">reveal</span><span class="p">:</span> <span class="n">CustodyKeyReveal</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="s">"""
+    Process ``CustodyKeyReveal`` operation.
+    Note that this function mutates ``state``.
+    """</span>
+    <span class="n">revealer</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">[</span><span class="n">reveal</span><span class="p">.</span><span class="n">revealer_index</span><span class="p">]</span>
+    <span class="n">epoch_to_sign</span> <span class="o">=</span> <span class="n">get_randao_epoch_for_custody_period</span><span class="p">(</span><span class="n">revealer</span><span class="p">.</span><span class="n">next_custody_secret_to_reveal</span><span class="p">,</span> <span class="n">reveal</span><span class="p">.</span><span class="n">revealer_index</span><span class="p">)</span>
+
+    <span class="n">custody_reveal_period</span> <span class="o">=</span> <span class="n">get_custody_period_for_validator</span><span class="p">(</span><span class="n">reveal</span><span class="p">.</span><span class="n">revealer_index</span><span class="p">,</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+    <span class="c1"># Only past custody periods can be revealed, except after exiting the exit period can be revealed
+</span>    <span class="n">is_past_reveal</span> <span class="o">=</span> <span class="n">revealer</span><span class="p">.</span><span class="n">next_custody_secret_to_reveal</span> <span class="o">&lt;</span> <span class="n">custody_reveal_period</span>
+    <span class="n">is_exited</span> <span class="o">=</span> <span class="n">revealer</span><span class="p">.</span><span class="n">exit_epoch</span> <span class="o">&lt;=</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="n">is_exit_period_reveal</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">revealer</span><span class="p">.</span><span class="n">next_custody_secret_to_reveal</span>
+        <span class="o">==</span> <span class="n">get_custody_period_for_validator</span><span class="p">(</span><span class="n">reveal</span><span class="p">.</span><span class="n">revealer_index</span><span class="p">,</span> <span class="n">revealer</span><span class="p">.</span><span class="n">exit_epoch</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="p">)</span>
+    <span class="k">assert</span> <span class="n">is_past_reveal</span> <span class="ow">or</span> <span class="p">(</span><span class="n">is_exited</span> <span class="ow">and</span> <span class="n">is_exit_period_reveal</span><span class="p">)</span>
+
+    <span class="c1"># Revealed validator is active or exited, but not withdrawn
+</span>    <span class="k">assert</span> <span class="n">is_slashable_validator</span><span class="p">(</span><span class="n">revealer</span><span class="p">,</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+
+    <span class="c1"># Verify signature
+</span>    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">DOMAIN_RANDAO</span><span class="p">,</span> <span class="n">epoch_to_sign</span><span class="p">)</span>
+    <span class="n">signing_root</span> <span class="o">=</span> <span class="n">compute_signing_root</span><span class="p">(</span><span class="n">epoch_to_sign</span><span class="p">,</span> <span class="n">domain</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">bls</span><span class="p">.</span><span class="n">Verify</span><span class="p">(</span><span class="n">revealer</span><span class="p">.</span><span class="n">pubkey</span><span class="p">,</span> <span class="n">signing_root</span><span class="p">,</span> <span class="n">reveal</span><span class="p">.</span><span class="n">reveal</span><span class="p">)</span>
+
+    <span class="c1"># Process reveal
+</span>    <span class="k">if</span> <span class="n">is_exited</span> <span class="ow">and</span> <span class="n">is_exit_period_reveal</span><span class="p">:</span>
+        <span class="n">revealer</span><span class="p">.</span><span class="n">all_custody_secrets_revealed_epoch</span> <span class="o">=</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="n">revealer</span><span class="p">.</span><span class="n">next_custody_secret_to_reveal</span> <span class="o">+=</span> <span class="mi">1</span>
+
+    <span class="c1"># Reward Block Proposer
+</span>    <span class="n">proposer_index</span> <span class="o">=</span> <span class="n">get_beacon_proposer_index</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="n">increase_balance</span><span class="p">(</span>
+        <span class="n">state</span><span class="p">,</span>
+        <span class="n">proposer_index</span><span class="p">,</span>
+        <span class="n">Gwei</span><span class="p">(</span><span class="n">get_base_reward</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">reveal</span><span class="p">.</span><span class="n">revealer_index</span><span class="p">)</span> <span class="o">//</span> <span class="n">MINOR_REWARD_QUOTIENT</span><span class="p">)</span>
+    <span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="early-derived-secret-reveals">Early derived secret reveals</h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_early_derived_secret_reveal</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">reveal</span><span class="p">:</span> <span class="n">EarlyDerivedSecretReveal</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="s">"""
+    Process ``EarlyDerivedSecretReveal`` operation.
+    Note that this function mutates ``state``.
+    """</span>
+    <span class="n">revealed_validator</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">[</span><span class="n">reveal</span><span class="p">.</span><span class="n">revealed_index</span><span class="p">]</span>
+    <span class="n">derived_secret_location</span> <span class="o">=</span> <span class="n">uint64</span><span class="p">(</span><span class="n">reveal</span><span class="p">.</span><span class="n">epoch</span> <span class="o">%</span> <span class="n">EARLY_DERIVED_SECRET_PENALTY_MAX_FUTURE_EPOCHS</span><span class="p">)</span>
+
+    <span class="k">assert</span> <span class="n">reveal</span><span class="p">.</span><span class="n">epoch</span> <span class="o">&gt;=</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">)</span> <span class="o">+</span> <span class="n">RANDAO_PENALTY_EPOCHS</span>
+    <span class="k">assert</span> <span class="n">reveal</span><span class="p">.</span><span class="n">epoch</span> <span class="o">&lt;</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">)</span> <span class="o">+</span> <span class="n">EARLY_DERIVED_SECRET_PENALTY_MAX_FUTURE_EPOCHS</span>
+    <span class="k">assert</span> <span class="ow">not</span> <span class="n">revealed_validator</span><span class="p">.</span><span class="n">slashed</span>
+    <span class="k">assert</span> <span class="n">reveal</span><span class="p">.</span><span class="n">revealed_index</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">state</span><span class="p">.</span><span class="n">exposed_derived_secrets</span><span class="p">[</span><span class="n">derived_secret_location</span><span class="p">]</span>
+
+    <span class="c1"># Verify signature correctness
+</span>    <span class="n">masker</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">[</span><span class="n">reveal</span><span class="p">.</span><span class="n">masker_index</span><span class="p">]</span>
+    <span class="n">pubkeys</span> <span class="o">=</span> <span class="p">[</span><span class="n">revealed_validator</span><span class="p">.</span><span class="n">pubkey</span><span class="p">,</span> <span class="n">masker</span><span class="p">.</span><span class="n">pubkey</span><span class="p">]</span>
+
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">DOMAIN_RANDAO</span><span class="p">,</span> <span class="n">reveal</span><span class="p">.</span><span class="n">epoch</span><span class="p">)</span>
+    <span class="n">signing_roots</span> <span class="o">=</span> <span class="p">[</span><span class="n">compute_signing_root</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">domain</span><span class="p">)</span> <span class="k">for</span> <span class="n">root</span> <span class="ow">in</span> <span class="p">[</span><span class="n">hash_tree_root</span><span class="p">(</span><span class="n">reveal</span><span class="p">.</span><span class="n">epoch</span><span class="p">),</span> <span class="n">reveal</span><span class="p">.</span><span class="n">mask</span><span class="p">]]</span>
+    <span class="k">assert</span> <span class="n">bls</span><span class="p">.</span><span class="n">AggregateVerify</span><span class="p">(</span><span class="n">pubkeys</span><span class="p">,</span> <span class="n">signing_roots</span><span class="p">,</span> <span class="n">reveal</span><span class="p">.</span><span class="n">reveal</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">reveal</span><span class="p">.</span><span class="n">epoch</span> <span class="o">&gt;=</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">)</span> <span class="o">+</span> <span class="n">CUSTODY_PERIOD_TO_RANDAO_PADDING</span><span class="p">:</span>
+        <span class="c1"># Full slashing when the secret was revealed so early it may be a valid custody
+</span>        <span class="c1"># round key
+</span>        <span class="n">slash_validator</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">reveal</span><span class="p">.</span><span class="n">revealed_index</span><span class="p">,</span> <span class="n">reveal</span><span class="p">.</span><span class="n">masker_index</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># Only a small penalty proportional to proposer slot reward for RANDAO reveal
+</span>        <span class="c1"># that does not interfere with the custody period
+</span>        <span class="c1"># The penalty is proportional to the max proposer reward
+</span>
+        <span class="c1"># Calculate penalty
+</span>        <span class="n">max_proposer_slot_reward</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">get_base_reward</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">reveal</span><span class="p">.</span><span class="n">revealed_index</span><span class="p">)</span>
+            <span class="o">*</span> <span class="n">SLOTS_PER_EPOCH</span>
+            <span class="o">//</span> <span class="nb">len</span><span class="p">(</span><span class="n">get_active_validator_indices</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">)))</span>
+            <span class="o">//</span> <span class="n">PROPOSER_REWARD_QUOTIENT</span>
+        <span class="p">)</span>
+        <span class="n">penalty</span> <span class="o">=</span> <span class="n">Gwei</span><span class="p">(</span>
+            <span class="n">max_proposer_slot_reward</span>
+            <span class="o">*</span> <span class="n">EARLY_DERIVED_SECRET_REVEAL_SLOT_REWARD_MULTIPLE</span>
+            <span class="o">*</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">exposed_derived_secrets</span><span class="p">[</span><span class="n">derived_secret_location</span><span class="p">])</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Apply penalty
+</span>        <span class="n">proposer_index</span> <span class="o">=</span> <span class="n">get_beacon_proposer_index</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+        <span class="n">whistleblower_index</span> <span class="o">=</span> <span class="n">reveal</span><span class="p">.</span><span class="n">masker_index</span>
+        <span class="n">whistleblowing_reward</span> <span class="o">=</span> <span class="n">Gwei</span><span class="p">(</span><span class="n">penalty</span> <span class="o">//</span> <span class="n">WHISTLEBLOWER_REWARD_QUOTIENT</span><span class="p">)</span>
+        <span class="n">proposer_reward</span> <span class="o">=</span> <span class="n">Gwei</span><span class="p">(</span><span class="n">whistleblowing_reward</span> <span class="o">//</span> <span class="n">PROPOSER_REWARD_QUOTIENT</span><span class="p">)</span>
+        <span class="n">increase_balance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">proposer_index</span><span class="p">,</span> <span class="n">proposer_reward</span><span class="p">)</span>
+        <span class="n">increase_balance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">whistleblower_index</span><span class="p">,</span> <span class="n">whistleblowing_reward</span> <span class="o">-</span> <span class="n">proposer_reward</span><span class="p">)</span>
+        <span class="n">decrease_balance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">reveal</span><span class="p">.</span><span class="n">revealed_index</span><span class="p">,</span> <span class="n">penalty</span><span class="p">)</span>
+
+        <span class="c1"># Mark this derived secret as exposed so validator cannot be punished repeatedly
+</span>        <span class="n">state</span><span class="p">.</span><span class="n">exposed_derived_secrets</span><span class="p">[</span><span class="n">derived_secret_location</span><span class="p">].</span><span class="n">append</span><span class="p">(</span><span class="n">reveal</span><span class="p">.</span><span class="n">revealed_index</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="custody-slashings">Custody Slashings</h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_custody_slashing</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">signed_custody_slashing</span><span class="p">:</span> <span class="n">SignedCustodySlashing</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">custody_slashing</span> <span class="o">=</span> <span class="n">signed_custody_slashing</span><span class="p">.</span><span class="n">message</span>
+    <span class="n">attestation</span> <span class="o">=</span> <span class="n">custody_slashing</span><span class="p">.</span><span class="n">attestation</span>
+
+    <span class="c1"># Any signed custody-slashing should result in at least one slashing.
+</span>    <span class="c1"># If the custody bits are valid, then the claim itself is slashed.
+</span>    <span class="n">malefactor</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">[</span><span class="n">custody_slashing</span><span class="p">.</span><span class="n">malefactor_index</span><span class="p">]</span> 
+    <span class="n">whistleblower</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">[</span><span class="n">custody_slashing</span><span class="p">.</span><span class="n">whistleblower_index</span><span class="p">]</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">DOMAIN_CUSTODY_BIT_SLASHING</span><span class="p">,</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+    <span class="n">signing_root</span> <span class="o">=</span> <span class="n">compute_signing_root</span><span class="p">(</span><span class="n">custody_slashing</span><span class="p">,</span> <span class="n">domain</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">bls</span><span class="p">.</span><span class="n">Verify</span><span class="p">(</span><span class="n">whistleblower</span><span class="p">.</span><span class="n">pubkey</span><span class="p">,</span> <span class="n">signing_root</span><span class="p">,</span> <span class="n">signed_custody_slashing</span><span class="p">.</span><span class="n">signature</span><span class="p">)</span>
+    <span class="c1"># Verify that the whistleblower is slashable
+</span>    <span class="k">assert</span> <span class="n">is_slashable_validator</span><span class="p">(</span><span class="n">whistleblower</span><span class="p">,</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+    <span class="c1"># Verify that the claimed malefactor is slashable
+</span>    <span class="k">assert</span> <span class="n">is_slashable_validator</span><span class="p">(</span><span class="n">malefactor</span><span class="p">,</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+
+    <span class="c1"># Verify the attestation
+</span>    <span class="k">assert</span> <span class="n">is_valid_indexed_attestation</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">get_indexed_attestation</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">attestation</span><span class="p">))</span>
+
+    <span class="c1"># TODO: can do a single combined merkle proof of data being attested.
+</span>    <span class="c1"># Verify the shard transition is indeed attested by the attestation
+</span>    <span class="n">shard_transition</span> <span class="o">=</span> <span class="n">custody_slashing</span><span class="p">.</span><span class="n">shard_transition</span>
+    <span class="k">assert</span> <span class="n">hash_tree_root</span><span class="p">(</span><span class="n">shard_transition</span><span class="p">)</span> <span class="o">==</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">shard_transition_root</span>
+    <span class="c1"># Verify that the provided data matches the shard-transition
+</span>    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">custody_slashing</span><span class="p">.</span><span class="n">data</span><span class="p">)</span> <span class="o">==</span> <span class="n">shard_transition</span><span class="p">.</span><span class="n">shard_block_lengths</span><span class="p">[</span><span class="n">custody_slashing</span><span class="p">.</span><span class="n">data_index</span><span class="p">]</span>
+    <span class="k">assert</span> <span class="n">hash_tree_root</span><span class="p">(</span><span class="n">custody_slashing</span><span class="p">.</span><span class="n">data</span><span class="p">)</span> <span class="o">==</span> <span class="n">shard_transition</span><span class="p">.</span><span class="n">shard_data_roots</span><span class="p">[</span><span class="n">custody_slashing</span><span class="p">.</span><span class="n">data_index</span><span class="p">]</span>
+    <span class="c1"># Verify existence and participation of claimed malefactor
+</span>    <span class="n">attesters</span> <span class="o">=</span> <span class="n">get_attesting_indices</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">,</span> <span class="n">attestation</span><span class="p">.</span><span class="n">aggregation_bits</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">custody_slashing</span><span class="p">.</span><span class="n">malefactor_index</span> <span class="ow">in</span> <span class="n">attesters</span>
+    
+    <span class="c1"># Verify the malefactor custody key
+</span>    <span class="n">epoch_to_sign</span> <span class="o">=</span> <span class="n">get_randao_epoch_for_custody_period</span><span class="p">(</span>
+        <span class="n">get_custody_period_for_validator</span><span class="p">(</span><span class="n">custody_slashing</span><span class="p">.</span><span class="n">malefactor_index</span><span class="p">,</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">target</span><span class="p">.</span><span class="n">epoch</span><span class="p">),</span>
+        <span class="n">custody_slashing</span><span class="p">.</span><span class="n">malefactor_index</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">DOMAIN_RANDAO</span><span class="p">,</span> <span class="n">epoch_to_sign</span><span class="p">)</span>
+    <span class="n">signing_root</span> <span class="o">=</span> <span class="n">compute_signing_root</span><span class="p">(</span><span class="n">epoch_to_sign</span><span class="p">,</span> <span class="n">domain</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">bls</span><span class="p">.</span><span class="n">Verify</span><span class="p">(</span><span class="n">malefactor</span><span class="p">.</span><span class="n">pubkey</span><span class="p">,</span> <span class="n">signing_root</span><span class="p">,</span> <span class="n">custody_slashing</span><span class="p">.</span><span class="n">malefactor_secret</span><span class="p">)</span>
+
+    <span class="c1"># Compute the custody bit
+</span>    <span class="n">computed_custody_bit</span> <span class="o">=</span> <span class="n">compute_custody_bit</span><span class="p">(</span><span class="n">custody_slashing</span><span class="p">.</span><span class="n">malefactor_secret</span><span class="p">,</span> <span class="n">custody_slashing</span><span class="p">.</span><span class="n">data</span><span class="p">)</span>
+
+    <span class="c1"># Verify the claim
+</span>    <span class="k">if</span> <span class="n">computed_custody_bit</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="c1"># Slash the malefactor, reward the other committee members
+</span>        <span class="n">slash_validator</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">custody_slashing</span><span class="p">.</span><span class="n">malefactor_index</span><span class="p">)</span>
+        <span class="n">committee</span> <span class="o">=</span> <span class="n">get_beacon_committee</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">slot</span><span class="p">,</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">index</span><span class="p">)</span>
+        <span class="n">others_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">committee</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="n">whistleblower_reward</span> <span class="o">=</span> <span class="n">Gwei</span><span class="p">(</span><span class="n">malefactor</span><span class="p">.</span><span class="n">effective_balance</span> <span class="o">//</span> <span class="n">WHISTLEBLOWER_REWARD_QUOTIENT</span> <span class="o">//</span> <span class="n">others_count</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">attester_index</span> <span class="ow">in</span> <span class="n">attesters</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">attester_index</span> <span class="o">!=</span> <span class="n">custody_slashing</span><span class="p">.</span><span class="n">malefactor_index</span><span class="p">:</span>
+                <span class="n">increase_balance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">attester_index</span><span class="p">,</span> <span class="n">whistleblower_reward</span><span class="p">)</span>
+        <span class="c1"># No special whisteblower reward: it is expected to be an attester. Others are free to slash too however. 
+</span>    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># The claim was false, the custody bit was correct. Slash the whistleblower that induced this work.
+</span>        <span class="n">slash_validator</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">custody_slashing</span><span class="p">.</span><span class="n">whistleblower_index</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h2 id="per-epoch-processing">Per-epoch processing</h2>
+
+<h3 id="handling-of-reveal-deadlines">Handling of reveal deadlines</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_reveal_deadlines</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">epoch</span> <span class="o">=</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">validator</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">):</span>
+        <span class="n">deadline</span> <span class="o">=</span> <span class="n">validator</span><span class="p">.</span><span class="n">next_custody_secret_to_reveal</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="n">get_custody_period_for_validator</span><span class="p">(</span><span class="n">ValidatorIndex</span><span class="p">(</span><span class="n">index</span><span class="p">),</span> <span class="n">epoch</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">deadline</span><span class="p">:</span>
+            <span class="n">slash_validator</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">ValidatorIndex</span><span class="p">(</span><span class="n">index</span><span class="p">))</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_challenge_deadlines</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">custody_chunk_challenge</span> <span class="ow">in</span> <span class="n">state</span><span class="p">.</span><span class="n">custody_chunk_challenge_records</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">custody_chunk_challenge</span><span class="p">.</span><span class="n">inclusion_epoch</span> <span class="o">+</span> <span class="n">EPOCHS_PER_CUSTODY_PERIOD</span><span class="p">:</span>
+            <span class="n">slash_validator</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">custody_chunk_challenge</span><span class="p">.</span><span class="n">responder_index</span><span class="p">,</span> <span class="n">custody_chunk_challenge</span><span class="p">.</span><span class="n">challenger_index</span><span class="p">)</span>
+            <span class="n">index_in_records</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">custody_chunk_challenge_records</span><span class="p">.</span><span class="n">index</span><span class="p">(</span><span class="n">custody_chunk_challenge</span><span class="p">)</span>
+            <span class="n">state</span><span class="p">.</span><span class="n">custody_chunk_challenge_records</span><span class="p">[</span><span class="n">index_in_records</span><span class="p">]</span> <span class="o">=</span> <span class="n">CustodyChunkChallengeRecord</span><span class="p">()</span>
+</code></pre></div></div>
+
+<h3 id="final-updates">Final updates</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_custody_final_updates</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="c1"># Clean up exposed RANDAO key reveals
+</span>    <span class="n">state</span><span class="p">.</span><span class="n">exposed_derived_secrets</span><span class="p">[</span><span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">)</span> <span class="o">%</span> <span class="n">EARLY_DERIVED_SECRET_PENALTY_MAX_FUTURE_EPOCHS</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># Reset withdrawable epochs if challenge records are empty
+</span>    <span class="n">records</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">custody_chunk_challenge_records</span>
+    <span class="n">validator_indices_in_records</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">record</span><span class="p">.</span><span class="n">responder_index</span> <span class="k">for</span> <span class="n">record</span> <span class="ow">in</span> <span class="n">records</span><span class="p">)</span>  <span class="c1"># non-duplicate
+</span>    <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">validator</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">validator</span><span class="p">.</span><span class="n">exit_epoch</span> <span class="o">!=</span> <span class="n">FAR_FUTURE_EPOCH</span><span class="p">:</span>
+            <span class="n">not_all_secrets_are_revealed</span> <span class="o">=</span> <span class="n">validator</span><span class="p">.</span><span class="n">all_custody_secrets_revealed_epoch</span> <span class="o">==</span> <span class="n">FAR_FUTURE_EPOCH</span>
+            <span class="k">if</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">validator_indices_in_records</span> <span class="ow">or</span> <span class="n">not_all_secrets_are_revealed</span><span class="p">:</span>
+                <span class="c1"># Delay withdrawable epochs if challenge records are not empty or not all
+</span>                <span class="c1"># custody secrets revealed
+</span>                <span class="n">validator</span><span class="p">.</span><span class="n">withdrawable_epoch</span> <span class="o">=</span> <span class="n">FAR_FUTURE_EPOCH</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># Reset withdrawable epochs if challenge records are empty and all secrets are revealed
+</span>                <span class="k">if</span> <span class="n">validator</span><span class="p">.</span><span class="n">withdrawable_epoch</span> <span class="o">==</span> <span class="n">FAR_FUTURE_EPOCH</span><span class="p">:</span>
+                    <span class="n">validator</span><span class="p">.</span><span class="n">withdrawable_epoch</span> <span class="o">=</span> <span class="n">Epoch</span><span class="p">(</span><span class="n">validator</span><span class="p">.</span><span class="n">all_custody_secrets_revealed_epoch</span>
+                                                         <span class="o">+</span> <span class="n">MIN_VALIDATOR_WITHDRAWABILITY_DELAY</span><span class="p">)</span>
+</code></pre></div></div>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

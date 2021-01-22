@@ -1,0 +1,265 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="general-test-format">General test format</h1>
+
+<p>This document defines the YAML format and structure used for Eth2 testing.</p>
+
+<h2 id="table-of-contents">Table of contents</h2>
+<!-- TOC -->
+
+<ul>
+  <li><a href="#about">About</a>
+    <ul>
+      <li><a href="#test-case-formats">Test-case formats</a></li>
+    </ul>
+  </li>
+  <li><a href="#glossary">Glossary</a></li>
+  <li><a href="#test-format-philosophy">Test format philosophy</a>
+    <ul>
+      <li><a href="#config-design">Config design</a></li>
+      <li><a href="#test-completeness">Test completeness</a></li>
+    </ul>
+  </li>
+  <li><a href="#test-structure">Test structure</a>
+    <ul>
+      <li><a href="#--config-name---"><code class="language-plaintext highlighter-rouge">&lt;config name&gt;/</code></a></li>
+      <li><a href="#--fork-or-phase-name---"><code class="language-plaintext highlighter-rouge">&lt;fork or phase name&gt;/</code></a></li>
+      <li><a href="#--test-runner-name---"><code class="language-plaintext highlighter-rouge">&lt;test runner name&gt;/</code></a></li>
+      <li><a href="#--test-handler-name---"><code class="language-plaintext highlighter-rouge">&lt;test handler name&gt;/</code></a></li>
+      <li><a href="#--test-suite-name---"><code class="language-plaintext highlighter-rouge">&lt;test suite name&gt;/</code></a></li>
+      <li><a href="#--test-case---"><code class="language-plaintext highlighter-rouge">&lt;test case&gt;/</code></a></li>
+      <li><a href="#--output-part--"><code class="language-plaintext highlighter-rouge">&lt;output part&gt;</code></a>
+        <ul>
+          <li><a href="#special-output-parts">Special output parts</a>
+            <ul>
+              <li><a href="#-metayaml-"><code class="language-plaintext highlighter-rouge">meta.yaml</code></a></li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li><a href="#config">Config</a></li>
+  <li><a href="#config-sourcing">Config sourcing</a></li>
+  <li><a href="#note-for-implementers">Note for implementers</a></li>
+</ul>
+
+<!-- /TOC -->
+
+<h2 id="about">About</h2>
+
+<p>Ethereum 2.0 uses YAML as the format for all cross client tests. This document describes at a high level the general format to which all test files should conform.</p>
+
+<h3 id="test-case-formats">Test-case formats</h3>
+
+<p>The particular formats of specific types of tests (test suites) are defined in separate documents.</p>
+
+<p>Test formats:</p>
+<ul>
+  <li><a href="/eth2specs/tests/formats/bls/"><code class="language-plaintext highlighter-rouge">bls</code></a></li>
+  <li><a href="/eth2specs/tests/formats/epoch_processing/"><code class="language-plaintext highlighter-rouge">epoch_processing</code></a></li>
+  <li><a href="/eth2specs/tests/formats/genesis/"><code class="language-plaintext highlighter-rouge">genesis</code></a></li>
+  <li><a href="/eth2specs/tests/formats/operations/"><code class="language-plaintext highlighter-rouge">operations</code></a></li>
+  <li><a href="/eth2specs/tests/formats/sanity/"><code class="language-plaintext highlighter-rouge">sanity</code></a></li>
+  <li><a href="/eth2specs/tests/formats/shuffling/"><code class="language-plaintext highlighter-rouge">shuffling</code></a></li>
+  <li><a href="/eth2specs/tests/formats/ssz_generic/"><code class="language-plaintext highlighter-rouge">ssz_generic</code></a></li>
+  <li><a href="/eth2specs/tests/formats/ssz_static/"><code class="language-plaintext highlighter-rouge">ssz_static</code></a></li>
+  <li>More formats are planned, see tracking issues for CI/testing</li>
+</ul>
+
+<h2 id="glossary">Glossary</h2>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">generator</code>: a program that outputs one or more test-cases, each organized into a <code class="language-plaintext highlighter-rouge">config &gt; runner &gt; handler &gt; suite</code> hierarchy.</li>
+  <li><code class="language-plaintext highlighter-rouge">config</code>: tests are grouped by configuration used for spec presets. In addition to the standard configurations, 
+<code class="language-plaintext highlighter-rouge">general</code> may be used as a catch-all for tests not restricted to one configuration. (E.g. BLS).</li>
+  <li><code class="language-plaintext highlighter-rouge">type</code>: the specialization of one single <code class="language-plaintext highlighter-rouge">generator</code>. E.g. epoch processing.</li>
+  <li><code class="language-plaintext highlighter-rouge">runner</code>: where a generator is a <em>“producer”</em>, this is the <em>“consumer”</em>.
+    <ul>
+      <li>A <code class="language-plaintext highlighter-rouge">runner</code> focuses on <em>only one</em> <code class="language-plaintext highlighter-rouge">type</code>, and each type has <em>only one</em> <code class="language-plaintext highlighter-rouge">runner</code>.</li>
+    </ul>
+  </li>
+  <li><code class="language-plaintext highlighter-rouge">handler</code>: a <code class="language-plaintext highlighter-rouge">runner</code> may be too limited sometimes, you may have a set of tests with a specific focus that requires a different format.
+To facilitate this, you specify a <code class="language-plaintext highlighter-rouge">handler</code>: the runner can deal with the format by using the specified handler.</li>
+  <li><code class="language-plaintext highlighter-rouge">suite</code>: a directory containing test cases that are coherent. Each <code class="language-plaintext highlighter-rouge">suite</code> under the same <code class="language-plaintext highlighter-rouge">handler</code> shares the same format.
+This is an organizational/cosmetic hierarchy layer.</li>
+  <li><code class="language-plaintext highlighter-rouge">case</code>: a test case, a directory in a <code class="language-plaintext highlighter-rouge">suite</code>. A case can be anything in general, 
+but its format should be well-defined in the documentation corresponding to the <code class="language-plaintext highlighter-rouge">type</code> (and <code class="language-plaintext highlighter-rouge">handler</code>).</li>
+  <li><code class="language-plaintext highlighter-rouge">case part</code>: a test case consists of different files, possibly in different formats, to facilitate the specific test case format better.
+Optionally, a <code class="language-plaintext highlighter-rouge">meta.yaml</code> is included to declare meta-data for the test, e.g. BLS requirements.</li>
+</ul>
+
+<h2 id="test-format-philosophy">Test format philosophy</h2>
+
+<h3 id="config-design">Config design</h3>
+
+<p>The configuration constant types are:</p>
+<ul>
+  <li>Never changing: genesis data.</li>
+  <li>Changing, but reliant on old value: e.g. an epoch time may change, but if you want to do the conversion 
+<code class="language-plaintext highlighter-rouge">(genesis data, timestamp) -&gt; epoch number</code>, you end up needing both constants.</li>
+  <li>Changing, but kept around during fork transition: finalization may take a while,
+e.g. an executable has to deal with new deposits and old deposits at the same time. Another example may be economic constants.</li>
+  <li>Additional, backwards compatible: new constants are introduced for later phases.</li>
+  <li>Changing: there is a very small chance some constant may really be <em>replaced</em>. 
+In this off-chance, it is likely better to include it as an additional variable,
+and some clients may simply stop supporting the old one if they do not want to sync from genesis.
+The change of functionality goes through a phase of deprecation of the old constant, and eventually only the new constant is kept around in the config (when old state is not supported anymore).</li>
+</ul>
+
+<p>Based on these types of changes, we model the config as a list of key value pairs,
+ that only grows with every fork (they may change in development versions of forks, however; git manages this).
+With this approach, configurations are backwards compatible (older clients ignore unknown variables) and easy to maintain.</p>
+
+<h3 id="test-completeness">Test completeness</h3>
+
+<p>Tests should be independent of any sync-data. If one wants to run a test, the input data should be available from the YAML.
+The aim is to provide clients with a well-defined scope of work to run a particular set of test-suites.</p>
+
+<ul>
+  <li>Clients that are complete are expected to contribute to testing, seeking for better resources to get conformance with the spec, and other clients.</li>
+  <li>Clients that are not complete in functionality can choose to ignore suites that use certain test-runners, or specific handlers of these test-runners.</li>
+  <li>Clients that are on older versions can test their work based on older releases of the generated tests, and catch up with newer releases when possible.</li>
+</ul>
+
+<h2 id="test-structure">Test structure</h2>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>File path structure:
+tests/&lt;config name&gt;/&lt;fork or phase name&gt;/&lt;test runner name&gt;/&lt;test handler name&gt;/&lt;test suite name&gt;/&lt;test case&gt;/&lt;output part&gt;
+</code></pre></div></div>
+
+<h3 id="config-name"><code class="language-plaintext highlighter-rouge">&lt;config name&gt;/</code></h3>
+
+<p>Configs are upper level. Some clients want to run minimal first, and useful for sanity checks during development too.
+As a top level dir, it is not duplicated, and the used config can be copied right into this directory as reference.</p>
+
+<h3 id="fork-or-phase-name"><code class="language-plaintext highlighter-rouge">&lt;fork or phase name&gt;/</code></h3>
+
+<p>This would be: “phase0”, “transferparty”, “phase1”, etc. Each introduces new tests, but does not copy tests that do not change. 
+If you like to test phase 1, you run phase 0 tests, with the configuration that includes phase 1 changes. Out of scope for now however.</p>
+
+<h3 id="test-runner-name"><code class="language-plaintext highlighter-rouge">&lt;test runner name&gt;/</code></h3>
+
+<p>The well known bls/shuffling/ssz_static/operations/epoch_processing/etc. Handlers can change the format, but there is a general target to test.</p>
+
+<h3 id="test-handler-name"><code class="language-plaintext highlighter-rouge">&lt;test handler name&gt;/</code></h3>
+
+<p>Specialization within category. All suites in here will have the same test case format.
+Using a <code class="language-plaintext highlighter-rouge">handler</code> in a <code class="language-plaintext highlighter-rouge">runner</code> is optional. A <code class="language-plaintext highlighter-rouge">core</code> (or other generic) handler may be used if the <code class="language-plaintext highlighter-rouge">runner</code> does not have different formats.</p>
+
+<h3 id="test-suite-name"><code class="language-plaintext highlighter-rouge">&lt;test suite name&gt;/</code></h3>
+
+<p>Suites are split up. Suite size (i.e. the amount of tests) does not change the maximum memory requirement, as test cases can be loaded one by one.
+This also makes filtered sets of tests fast and easy to load.</p>
+
+<h3 id="test-case"><code class="language-plaintext highlighter-rouge">&lt;test case&gt;/</code></h3>
+
+<p>Cases are split up too. This enables diffing of parts of the test case, tracking changes per part, while still using LFS. Also enables different formats for some parts.</p>
+
+<h3 id="output-part"><code class="language-plaintext highlighter-rouge">&lt;output part&gt;</code></h3>
+
+<p>E.g. <code class="language-plaintext highlighter-rouge">pre.yaml</code>, <code class="language-plaintext highlighter-rouge">deposit.yaml</code>, <code class="language-plaintext highlighter-rouge">post.yaml</code>.</p>
+
+<p>Diffing a <code class="language-plaintext highlighter-rouge">pre.yaml</code> and <code class="language-plaintext highlighter-rouge">post.yaml</code> provides all the information for testing, good for readability of the change. 
+Then the difference between pre and post can be compared to anything that changes the pre state, e.g. <code class="language-plaintext highlighter-rouge">deposit.yaml</code></p>
+
+<p>These files allow for custom formats for some parts of the test. E.g. something encoded in SSZ.</p>
+
+<p>Some yaml files have copies, but formatted as raw SSZ bytes: <code class="language-plaintext highlighter-rouge">pre.ssz</code>, <code class="language-plaintext highlighter-rouge">deposit.ssz</code>, <code class="language-plaintext highlighter-rouge">post.ssz</code>.
+The yaml files are intended to be deprecated, and clients should shift to ssz inputs for efficiency.
+Deprecation will start once a viewer of SSZ test-cases is in place, to maintain a standard of readable test cases.
+This also means that some clients can drop legacy YAML -&gt; JSON/other -&gt; SSZ work-arounds.
+(These were implemented to support the uint64 YAML, hex strings, etc. Things that were not idiomatic to their language.)</p>
+
+<p>Yaml will not be deprecated for tests that do not use SSZ: e.g. shuffling and BLS tests.
+In this case, there is no work around for loading necessary anyway, and the size and efficiency of yaml is acceptable.</p>
+
+<h4 id="special-output-parts">Special output parts</h4>
+
+<h5 id="metayaml"><code class="language-plaintext highlighter-rouge">meta.yaml</code></h5>
+
+<p>If present (it is optional), the test is enhanced with extra data to describe usage. Specialized data is described in the documentation of the specific test format.</p>
+
+<p>Common data is documented here:</p>
+
+<p>Some test-case formats share some common key-value pair patterns, and these are documented here:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>bls_setting: int     -- optional, can have 3 different values:
+                            0: (default, applies if key-value pair is absent). Free to choose either BLS ON or OFF.
+                                 Tests are generated with valid BLS data in this case,
+                                 but there is no change of outcome when running the test if BLS is ON or OFF.
+                            1: known as "BLS required" - if the test validity is strictly dependent on BLS being ON
+                            2: known as "BLS ignored"  - if the test validity is strictly dependent on BLS being OFF
+reveal_deadlines_setting:   -- optional, can have 2 different values:
+                            0: default, `process_reveal_deadlines` is ON.
+                            1: `process_reveal_deadlines` is OFF.
+</code></pre></div></div>
+
+<h2 id="config">Config</h2>
+
+<p>A configuration is a separate YAML file.
+Separation of configuration and tests aims to:</p>
+<ul>
+  <li>Prevent duplication of configuration</li>
+  <li>Make all tests easy to upgrade (e.g. when a new config constant is introduced)</li>
+  <li>Clearly define which constants to use</li>
+  <li>Be easily shareable between clients, for cross-client short- or long-lived testnets</li>
+  <li>Minimize the amount of different constants permutations to compile as a client.
+<em>Note</em>: Some clients prefer compile-time constants and optimizations.
+They should compile for each configuration once, and run the corresponding tests per build target.</li>
+  <li>Include constants to coordinate forking with</li>
+</ul>
+
+<p>The format is described in <a href="/eth2specs/configs/#format"><code class="language-plaintext highlighter-rouge">/configs</code></a>.</p>
+
+<h2 id="config-sourcing">Config sourcing</h2>
+
+<p>The constants configurations are located in:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;specs repo root&gt;/configs/&lt;config name&gt;.yaml
+</code></pre></div></div>
+
+<p>And copied by CI for testing purposes to:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;tests repo root&gt;/tests/&lt;config name&gt;/&lt;config name&gt;.yaml
+</code></pre></div></div>
+
+<p>The first <code class="language-plaintext highlighter-rouge">&lt;config name&gt;</code> is a directory, which contains exactly all tests that make use of the given config.</p>
+
+<h2 id="note-for-implementers">Note for implementers</h2>
+
+<p>The basic pattern for test-suite loading and running is:</p>
+
+<ol>
+  <li>For a specific config, load it first (and only need to do so once),
+ then continue with the tests defined in the config folder.</li>
+  <li>Select a fork. Repeat for each fork if running tests for multiple forks.</li>
+  <li>Select the category and specialization of interest (e.g. <code class="language-plaintext highlighter-rouge">operations &gt; deposits</code>). Again, repeat for each if running all.</li>
+  <li>Select a test suite. Or repeat for each.</li>
+  <li>Select a test case. Or repeat for each.</li>
+  <li>Load the parts of the case. And <code class="language-plaintext highlighter-rouge">meta.yaml</code> if present.</li>
+  <li>Run the test, as defined by the test format.</li>
+</ol>
+
+<p>Step 1 may be a step with compile time selection of a configuration, if desired for optimization.
+The base requirement is just to use the same set of constants, independent of the loading process.</p>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

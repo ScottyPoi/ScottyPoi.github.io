@@ -1,0 +1,174 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="ethereum-20-phase-1--shard-transition-and-fraud-proofs">Ethereum 2.0 Phase 1 – Shard Transition and Fraud Proofs</h1>
+
+<p><strong>Notice</strong>: This document is a work-in-progress for researchers and implementers.</p>
+
+<h2 id="table-of-contents">Table of contents</h2>
+
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+<ul>
+  <li><a href="#introduction">Introduction</a></li>
+  <li><a href="#helper-functions">Helper functions</a>
+    <ul>
+      <li><a href="#shard-block-verification-functions">Shard block verification functions</a>
+        <ul>
+          <li><a href="#verify_shard_block_message"><code class="language-plaintext highlighter-rouge">verify_shard_block_message</code></a></li>
+          <li><a href="#verify_shard_block_signature"><code class="language-plaintext highlighter-rouge">verify_shard_block_signature</code></a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li><a href="#shard-state-transition-function">Shard state transition function</a></li>
+  <li><a href="#fraud-proofs">Fraud proofs</a>
+    <ul>
+      <li><a href="#verifying-the-proof">Verifying the proof</a></li>
+    </ul>
+  </li>
+</ul>
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+<h2 id="introduction">Introduction</h2>
+
+<p>This document describes the shard transition function and fraud proofs as part of Phase 1 of Ethereum 2.0.</p>
+
+<h2 id="helper-functions">Helper functions</h2>
+
+<h3 id="shard-block-verification-functions">Shard block verification functions</h3>
+
+<h4 id="verify_shard_block_message"><code class="language-plaintext highlighter-rouge">verify_shard_block_message</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">verify_shard_block_message</span><span class="p">(</span><span class="n">beacon_parent_state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+                               <span class="n">shard_parent_state</span><span class="p">:</span> <span class="n">ShardState</span><span class="p">,</span>
+                               <span class="n">block</span><span class="p">:</span> <span class="n">ShardBlock</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="c1"># Check `shard_parent_root` field
+</span>    <span class="k">assert</span> <span class="n">block</span><span class="p">.</span><span class="n">shard_parent_root</span> <span class="o">==</span> <span class="n">shard_parent_state</span><span class="p">.</span><span class="n">latest_block_root</span>
+    <span class="c1"># Check `beacon_parent_root` field
+</span>    <span class="n">beacon_parent_block_header</span> <span class="o">=</span> <span class="n">beacon_parent_state</span><span class="p">.</span><span class="n">latest_block_header</span><span class="p">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">beacon_parent_block_header</span><span class="p">.</span><span class="n">state_root</span> <span class="o">==</span> <span class="n">Root</span><span class="p">():</span>
+        <span class="n">beacon_parent_block_header</span><span class="p">.</span><span class="n">state_root</span> <span class="o">=</span> <span class="n">hash_tree_root</span><span class="p">(</span><span class="n">beacon_parent_state</span><span class="p">)</span>
+    <span class="n">beacon_parent_root</span> <span class="o">=</span> <span class="n">hash_tree_root</span><span class="p">(</span><span class="n">beacon_parent_block_header</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">block</span><span class="p">.</span><span class="n">beacon_parent_root</span> <span class="o">==</span> <span class="n">beacon_parent_root</span>
+    <span class="c1"># Check `slot` field
+</span>    <span class="n">shard</span> <span class="o">=</span> <span class="n">block</span><span class="p">.</span><span class="n">shard</span>
+    <span class="n">next_slot</span> <span class="o">=</span> <span class="n">Slot</span><span class="p">(</span><span class="n">block</span><span class="p">.</span><span class="n">slot</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">offset_slots</span> <span class="o">=</span> <span class="n">compute_offset_slots</span><span class="p">(</span><span class="n">get_latest_slot_for_shard</span><span class="p">(</span><span class="n">beacon_parent_state</span><span class="p">,</span> <span class="n">shard</span><span class="p">),</span> <span class="n">next_slot</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">block</span><span class="p">.</span><span class="n">slot</span> <span class="ow">in</span> <span class="n">offset_slots</span>
+    <span class="c1"># Check `proposer_index` field
+</span>    <span class="k">assert</span> <span class="n">block</span><span class="p">.</span><span class="n">proposer_index</span> <span class="o">==</span> <span class="n">get_shard_proposer_index</span><span class="p">(</span><span class="n">beacon_parent_state</span><span class="p">,</span> <span class="n">block</span><span class="p">.</span><span class="n">slot</span><span class="p">,</span> <span class="n">shard</span><span class="p">)</span>
+    <span class="c1"># Check `body` field
+</span>    <span class="k">assert</span> <span class="mi">0</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">block</span><span class="p">.</span><span class="n">body</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">MAX_SHARD_BLOCK_SIZE</span>
+    <span class="k">return</span> <span class="bp">True</span>
+</code></pre></div></div>
+
+<h4 id="verify_shard_block_signature"><code class="language-plaintext highlighter-rouge">verify_shard_block_signature</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">verify_shard_block_signature</span><span class="p">(</span><span class="n">beacon_parent_state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+                                 <span class="n">signed_block</span><span class="p">:</span> <span class="n">SignedShardBlock</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="n">proposer</span> <span class="o">=</span> <span class="n">beacon_parent_state</span><span class="p">.</span><span class="n">validators</span><span class="p">[</span><span class="n">signed_block</span><span class="p">.</span><span class="n">message</span><span class="p">.</span><span class="n">proposer_index</span><span class="p">]</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">beacon_parent_state</span><span class="p">,</span> <span class="n">DOMAIN_SHARD_PROPOSAL</span><span class="p">,</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">signed_block</span><span class="p">.</span><span class="n">message</span><span class="p">.</span><span class="n">slot</span><span class="p">))</span>
+    <span class="n">signing_root</span> <span class="o">=</span> <span class="n">compute_signing_root</span><span class="p">(</span><span class="n">signed_block</span><span class="p">.</span><span class="n">message</span><span class="p">,</span> <span class="n">domain</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">bls</span><span class="p">.</span><span class="n">Verify</span><span class="p">(</span><span class="n">proposer</span><span class="p">.</span><span class="n">pubkey</span><span class="p">,</span> <span class="n">signing_root</span><span class="p">,</span> <span class="n">signed_block</span><span class="p">.</span><span class="n">signature</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h2 id="shard-state-transition-function">Shard state transition function</h2>
+
+<p>The post-state corresponding to a pre-state <code class="language-plaintext highlighter-rouge">shard_state</code> and a signed block <code class="language-plaintext highlighter-rouge">signed_block</code> is defined as <code class="language-plaintext highlighter-rouge">shard_state_transition(shard_state, signed_block, beacon_parent_state)</code>, where <code class="language-plaintext highlighter-rouge">beacon_parent_state</code> is the parent beacon state of the <code class="language-plaintext highlighter-rouge">signed_block</code>. State transitions that trigger an unhandled exception (e.g. a failed <code class="language-plaintext highlighter-rouge">assert</code> or an out-of-range list access) are considered invalid. State transitions that cause a <code class="language-plaintext highlighter-rouge">uint64</code> overflow or underflow are also considered invalid.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">shard_state_transition</span><span class="p">(</span><span class="n">shard_state</span><span class="p">:</span> <span class="n">ShardState</span><span class="p">,</span>
+                           <span class="n">signed_block</span><span class="p">:</span> <span class="n">SignedShardBlock</span><span class="p">,</span>
+                           <span class="n">beacon_parent_state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+                           <span class="n">validate_result</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="bp">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="k">assert</span> <span class="n">verify_shard_block_message</span><span class="p">(</span><span class="n">beacon_parent_state</span><span class="p">,</span> <span class="n">shard_state</span><span class="p">,</span> <span class="n">signed_block</span><span class="p">.</span><span class="n">message</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">validate_result</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">verify_shard_block_signature</span><span class="p">(</span><span class="n">beacon_parent_state</span><span class="p">,</span> <span class="n">signed_block</span><span class="p">)</span>
+
+    <span class="n">process_shard_block</span><span class="p">(</span><span class="n">shard_state</span><span class="p">,</span> <span class="n">signed_block</span><span class="p">.</span><span class="n">message</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_shard_block</span><span class="p">(</span><span class="n">shard_state</span><span class="p">:</span> <span class="n">ShardState</span><span class="p">,</span>
+                        <span class="n">block</span><span class="p">:</span> <span class="n">ShardBlock</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="s">"""
+    Update ``shard_state`` with shard ``block``.
+    """</span>
+    <span class="n">shard_state</span><span class="p">.</span><span class="n">slot</span> <span class="o">=</span> <span class="n">block</span><span class="p">.</span><span class="n">slot</span>
+    <span class="n">prev_gasprice</span> <span class="o">=</span> <span class="n">shard_state</span><span class="p">.</span><span class="n">gasprice</span>
+    <span class="n">shard_block_length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">block</span><span class="p">.</span><span class="n">body</span><span class="p">)</span>
+    <span class="n">shard_state</span><span class="p">.</span><span class="n">gasprice</span> <span class="o">=</span> <span class="n">compute_updated_gasprice</span><span class="p">(</span><span class="n">prev_gasprice</span><span class="p">,</span> <span class="n">uint64</span><span class="p">(</span><span class="n">shard_block_length</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">shard_block_length</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">shard_state</span><span class="p">.</span><span class="n">latest_block_root</span> <span class="o">=</span> <span class="n">hash_tree_root</span><span class="p">(</span><span class="n">block</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h2 id="fraud-proofs">Fraud proofs</h2>
+
+<h3 id="verifying-the-proof">Verifying the proof</h3>
+
+<p>TODO. The intent is to have a single universal fraud proof type, which contains the following parts:</p>
+
+<ol>
+  <li>An on-time attestation <code class="language-plaintext highlighter-rouge">attestation</code> on some shard <code class="language-plaintext highlighter-rouge">shard</code> signing a <code class="language-plaintext highlighter-rouge">transition: ShardTransition</code></li>
+  <li>An index <code class="language-plaintext highlighter-rouge">offset_index</code> of a particular position to focus on</li>
+  <li>The <code class="language-plaintext highlighter-rouge">transition: ShardTransition</code> itself</li>
+  <li>The full body of the shard block <code class="language-plaintext highlighter-rouge">shard_block</code></li>
+  <li>A Merkle proof to the <code class="language-plaintext highlighter-rouge">shard_states</code> in the parent block the attestation is referencing</li>
+  <li>The <code class="language-plaintext highlighter-rouge">subkey</code> to generate the custody bit</li>
+</ol>
+
+<p>Call the following function to verify the proof:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">is_valid_fraud_proof</span><span class="p">(</span><span class="n">beacon_state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+                         <span class="n">attestation</span><span class="p">:</span> <span class="n">Attestation</span><span class="p">,</span>
+                         <span class="n">offset_index</span><span class="p">:</span> <span class="n">uint64</span><span class="p">,</span>
+                         <span class="n">transition</span><span class="p">:</span> <span class="n">ShardTransition</span><span class="p">,</span>
+                         <span class="n">block</span><span class="p">:</span> <span class="n">ShardBlock</span><span class="p">,</span>
+                         <span class="n">subkey</span><span class="p">:</span> <span class="n">BLSPubkey</span><span class="p">,</span>
+                         <span class="n">beacon_parent_block</span><span class="p">:</span> <span class="n">BeaconBlock</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="c1"># 1. Check if `custody_bits[offset_index][j] != generate_custody_bit(subkey, block_contents)` for any `j`.
+</span>    <span class="n">custody_bits</span> <span class="o">=</span> <span class="n">attestation</span><span class="p">.</span><span class="n">custody_bits_blocks</span>
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">custody_bits</span><span class="p">[</span><span class="n">offset_index</span><span class="p">])):</span>
+        <span class="k">if</span> <span class="n">custody_bits</span><span class="p">[</span><span class="n">offset_index</span><span class="p">][</span><span class="n">j</span><span class="p">]</span> <span class="o">!=</span> <span class="n">generate_custody_bit</span><span class="p">(</span><span class="n">subkey</span><span class="p">,</span> <span class="n">block</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">True</span>
+
+    <span class="c1"># 2. Check if the shard state transition result is wrong between
+</span>    <span class="c1"># `transition.shard_states[offset_index - 1]` to `transition.shard_states[offset_index]`.
+</span>    <span class="k">if</span> <span class="n">offset_index</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">shard_states</span> <span class="o">=</span> <span class="n">beacon_parent_block</span><span class="p">.</span><span class="n">body</span><span class="p">.</span><span class="n">shard_transitions</span><span class="p">[</span><span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">shard</span><span class="p">].</span><span class="n">shard_states</span>
+        <span class="n">shard_state</span> <span class="o">=</span> <span class="n">shard_states</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">shard_states</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">shard_state</span> <span class="o">=</span> <span class="n">transition</span><span class="p">.</span><span class="n">shard_states</span><span class="p">[</span><span class="n">offset_index</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>  <span class="c1"># Not doing the actual state updates here.
+</span>
+    <span class="n">process_shard_block</span><span class="p">(</span><span class="n">shard_state</span><span class="p">,</span> <span class="n">block</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">shard_state</span> <span class="o">!=</span> <span class="n">transition</span><span class="p">.</span><span class="n">shard_states</span><span class="p">[</span><span class="n">offset_index</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="bp">True</span>
+
+    <span class="k">return</span> <span class="bp">False</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">generate_custody_bit</span><span class="p">(</span><span class="n">subkey</span><span class="p">:</span> <span class="n">BLSPubkey</span><span class="p">,</span> <span class="n">block</span><span class="p">:</span> <span class="n">ShardBlock</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="c1"># TODO
+</span>    <span class="p">...</span>
+</code></pre></div></div>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

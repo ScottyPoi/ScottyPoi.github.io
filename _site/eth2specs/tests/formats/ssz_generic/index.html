@@ -1,0 +1,225 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="ssz-generic-tests">SSZ, generic tests</h1>
+
+<p>This set of test-suites provides general testing for SSZ:
+ to decode any container/list/vector/other type from binary data, encode it back, and compute the hash-tree-root.</p>
+
+<p>This test collection for general-purpose SSZ is experimental.
+The <code class="language-plaintext highlighter-rouge">ssz_static</code> suite is the required minimal support for SSZ, and should be prioritized.</p>
+
+<p>The <code class="language-plaintext highlighter-rouge">ssz_generic</code> tests are split up into different handler, each specialized into a SSZ type:</p>
+
+<ul>
+  <li>Vectors
+    <ul>
+      <li><code class="language-plaintext highlighter-rouge">basic_vector</code></li>
+      <li><code class="language-plaintext highlighter-rouge">complex_vector</code> <em>not supported yet</em></li>
+    </ul>
+  </li>
+  <li>List
+    <ul>
+      <li><code class="language-plaintext highlighter-rouge">basic_list</code> <em>not supported yet</em></li>
+      <li><code class="language-plaintext highlighter-rouge">complex_list</code> <em>not supported yet</em></li>
+    </ul>
+  </li>
+  <li>Bitfields
+    <ul>
+      <li><code class="language-plaintext highlighter-rouge">bitvector</code></li>
+      <li><code class="language-plaintext highlighter-rouge">bitlist</code></li>
+    </ul>
+  </li>
+  <li>Basic types
+    <ul>
+      <li><code class="language-plaintext highlighter-rouge">boolean</code></li>
+      <li><code class="language-plaintext highlighter-rouge">uints</code></li>
+    </ul>
+  </li>
+  <li>Containers
+    <ul>
+      <li><code class="language-plaintext highlighter-rouge">containers</code></li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="format">Format</h2>
+
+<p>For each type, a <code class="language-plaintext highlighter-rouge">valid</code> and an <code class="language-plaintext highlighter-rouge">invalid</code> suite is implemented.
+The cases have the same format, but those in the <code class="language-plaintext highlighter-rouge">invalid</code> suite only declare a subset of the data a test in the <code class="language-plaintext highlighter-rouge">valid</code> declares.</p>
+
+<p>Each of the handlers encodes the SSZ type declaration in the file-name. See <a href="#type-declarations">Type Declarations</a>.</p>
+
+<h3 id="valid"><code class="language-plaintext highlighter-rouge">valid</code></h3>
+
+<p>Valid has 3 parts: <code class="language-plaintext highlighter-rouge">meta.yaml</code>, <code class="language-plaintext highlighter-rouge">serialized.ssz</code>, <code class="language-plaintext highlighter-rouge">value.yaml</code></p>
+
+<h3 id="metayaml"><code class="language-plaintext highlighter-rouge">meta.yaml</code></h3>
+
+<p>Valid ssz objects can have a hash-tree-root.
+The expected roots are encoded into the metadata yaml:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">root</span><span class="pi">:</span> <span class="s">Bytes32             -- Hash-tree-root of the object</span>
+</code></pre></div></div>
+
+<p>The <code class="language-plaintext highlighter-rouge">Bytes32</code> is encoded as a string, hexadecimal encoding, prefixed with <code class="language-plaintext highlighter-rouge">0x</code>.</p>
+
+<h3 id="serializedssz"><code class="language-plaintext highlighter-rouge">serialized.ssz</code></h3>
+
+<p>The serialized form of the object, as raw SSZ bytes.</p>
+
+<h3 id="valueyaml"><code class="language-plaintext highlighter-rouge">value.yaml</code></h3>
+
+<p>The object, encoded as a YAML structure. Using the same familiar encoding as YAML data in the other test suites.</p>
+
+<h3 id="conditions">Conditions</h3>
+
+<p>The conditions are the same for each type:</p>
+
+<ul>
+  <li>Encoding: After encoding the given <code class="language-plaintext highlighter-rouge">value</code> object, the output should match <code class="language-plaintext highlighter-rouge">serialized</code>.</li>
+  <li>Decoding: After decoding the given <code class="language-plaintext highlighter-rouge">serialized</code> bytes, it should match the <code class="language-plaintext highlighter-rouge">value</code> object.</li>
+  <li>Hash-tree-root: the root should match the root declared in the metadata.</li>
+</ul>
+
+<h2 id="invalid"><code class="language-plaintext highlighter-rouge">invalid</code></h2>
+
+<p>Test cases in the <code class="language-plaintext highlighter-rouge">invalid</code> suite only include the <code class="language-plaintext highlighter-rouge">serialized.ssz</code></p>
+
+<h4 id="condition">Condition</h4>
+
+<p>Unlike the <code class="language-plaintext highlighter-rouge">valid</code> suite, invalid encodings do not have any <code class="language-plaintext highlighter-rouge">value</code> or hash tree root.
+The <code class="language-plaintext highlighter-rouge">serialized</code> data should simply not be decoded without raising an error.</p>
+
+<p>Note that for some type declarations in the invalid suite, the type itself may technically be invalid.
+This is a valid way of detecting <code class="language-plaintext highlighter-rouge">invalid</code> data too. E.g. a 0-length basic vector.</p>
+
+<h2 id="type-declarations">Type declarations</h2>
+
+<p>Most types are not as static, and can reasonably be constructed during test runtime from the test case name.
+Formats are listed below.</p>
+
+<p>For each test case, an additional <code class="language-plaintext highlighter-rouge">_{extra...}</code> may be appended to the name,
+ where <code class="language-plaintext highlighter-rouge">{extra...}</code> contains a human readable indication of the test case contents for debugging purposes.</p>
+
+<h3 id="basic_vector"><code class="language-plaintext highlighter-rouge">basic_vector</code></h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Template:
+
+vec_{element type}_{length}
+
+Data:
+
+{element type}: bool, uint8, uint16, uint32, uint64, uint128, uint256
+
+{length}: an unsigned integer
+</code></pre></div></div>
+
+<h3 id="bitlist"><code class="language-plaintext highlighter-rouge">bitlist</code></h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Template:
+
+bitlist_{limit}
+
+Data:
+
+{limit}: the list limit, in bits, of the bitlist. Does not include the length-delimiting bit in the serialized form.
+</code></pre></div></div>
+
+<h3 id="bitvector"><code class="language-plaintext highlighter-rouge">bitvector</code></h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Template:
+
+bitvec_{length}
+
+Data:
+
+{length}: the length, in bits, of the bitvector.
+</code></pre></div></div>
+
+<h3 id="boolean"><code class="language-plaintext highlighter-rouge">boolean</code></h3>
+
+<p>A boolean has no type variations. Instead, file names just plainly describe the contents for debugging.</p>
+
+<h3 id="uints"><code class="language-plaintext highlighter-rouge">uints</code></h3>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Template:
+
+uint_{size}
+
+Data:
+
+{size}: the uint size: 8, 16, 32, 64, 128 or 256.
+</code></pre></div></div>
+
+<h3 id="containers"><code class="language-plaintext highlighter-rouge">containers</code></h3>
+
+<p>Containers are more complicated than the other types. Instead, a set of pre-defined container structures is referenced:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Template:
+
+{container name}
+
+Data:
+
+{container name}: Any of the container names listed below (excluding the `(Container)` python super type)
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+<span class="k">class</span> <span class="nc">SingleFieldTestStruct</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">A</span><span class="p">:</span> <span class="n">byte</span>
+
+
+<span class="k">class</span> <span class="nc">SmallTestStruct</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">A</span><span class="p">:</span> <span class="n">uint16</span>
+    <span class="n">B</span><span class="p">:</span> <span class="n">uint16</span>
+
+
+<span class="k">class</span> <span class="nc">FixedTestStruct</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">A</span><span class="p">:</span> <span class="n">uint8</span>
+    <span class="n">B</span><span class="p">:</span> <span class="n">uint64</span>
+    <span class="n">C</span><span class="p">:</span> <span class="n">uint32</span>
+
+
+<span class="k">class</span> <span class="nc">VarTestStruct</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">A</span><span class="p">:</span> <span class="n">uint16</span>
+    <span class="n">B</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">uint16</span><span class="p">,</span> <span class="mi">1024</span><span class="p">]</span>
+    <span class="n">C</span><span class="p">:</span> <span class="n">uint8</span>
+
+
+<span class="k">class</span> <span class="nc">ComplexTestStruct</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">A</span><span class="p">:</span> <span class="n">uint16</span>
+    <span class="n">B</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">uint16</span><span class="p">,</span> <span class="mi">128</span><span class="p">]</span>
+    <span class="n">C</span><span class="p">:</span> <span class="n">uint8</span>
+    <span class="n">D</span><span class="p">:</span> <span class="n">Bytes</span><span class="p">[</span><span class="mi">256</span><span class="p">]</span>
+    <span class="n">E</span><span class="p">:</span> <span class="n">VarTestStruct</span>
+    <span class="n">F</span><span class="p">:</span> <span class="n">Vector</span><span class="p">[</span><span class="n">FixedTestStruct</span><span class="p">,</span> <span class="mi">4</span><span class="p">]</span>
+    <span class="n">G</span><span class="p">:</span> <span class="n">Vector</span><span class="p">[</span><span class="n">VarTestStruct</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>
+
+
+<span class="k">class</span> <span class="nc">BitsStruct</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">A</span><span class="p">:</span> <span class="n">Bitlist</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span>
+    <span class="n">B</span><span class="p">:</span> <span class="n">Bitvector</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+    <span class="n">C</span><span class="p">:</span> <span class="n">Bitvector</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">D</span><span class="p">:</span> <span class="n">Bitlist</span><span class="p">[</span><span class="mi">6</span><span class="p">]</span>
+    <span class="n">E</span><span class="p">:</span> <span class="n">Bitvector</span><span class="p">[</span><span class="mi">8</span><span class="p">]</span>
+</code></pre></div></div>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

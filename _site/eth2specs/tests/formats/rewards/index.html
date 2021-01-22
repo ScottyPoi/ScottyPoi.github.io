@@ -1,0 +1,94 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="rewards-tests">Rewards tests</h1>
+
+<p>All rewards deltas sub-functions are tested for each test case.
+There is no “change” factor, the rewards/penalties outputs are pure functions with just the pre-state as input.
+(See test condition documentation on how to run the tests.)</p>
+
+<p><code class="language-plaintext highlighter-rouge">Deltas</code> is defined as:</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">Deltas</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">rewards</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Gwei</span><span class="p">,</span> <span class="n">VALIDATOR_REGISTRY_LIMIT</span><span class="p">]</span>
+    <span class="n">penalties</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Gwei</span><span class="p">,</span> <span class="n">VALIDATOR_REGISTRY_LIMIT</span><span class="p">]</span>
+</code></pre></div></div>
+
+<h2 id="test-case-format">Test case format</h2>
+
+<h3 id="metayaml"><code class="language-plaintext highlighter-rouge">meta.yaml</code></h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">description</span><span class="pi">:</span> <span class="s">string    -- Optional description of test case, purely for debugging purposes.</span>
+                          <span class="s">Tests should use the directory name of the test case as identifier, not the description.</span>
+</code></pre></div></div>
+
+<p><em>Note</em>: No signature verification happens within rewards sub-functions. These
+ tests can safely be run with or without BLS enabled.</p>
+
+<h3 id="preyaml"><code class="language-plaintext highlighter-rouge">pre.yaml</code></h3>
+
+<p>A YAML-encoded <code class="language-plaintext highlighter-rouge">BeaconState</code>, the state before running the rewards sub-function.</p>
+
+<p>Also available as <code class="language-plaintext highlighter-rouge">pre.ssz</code>.</p>
+
+<h3 id="source_deltasyaml"><code class="language-plaintext highlighter-rouge">source_deltas.yaml</code></h3>
+
+<p>A YAML-encoded <code class="language-plaintext highlighter-rouge">Deltas</code> representing the rewards and penalties returned by the rewards the <code class="language-plaintext highlighter-rouge">get_source_deltas</code> function</p>
+
+<p>Also available as <code class="language-plaintext highlighter-rouge">source_deltas.ssz</code>.</p>
+
+<h3 id="target_deltasyaml"><code class="language-plaintext highlighter-rouge">target_deltas.yaml</code></h3>
+
+<p>A YAML-encoded <code class="language-plaintext highlighter-rouge">Deltas</code> representing the rewards and penalties returned by the rewards the <code class="language-plaintext highlighter-rouge">get_target_deltas</code> function</p>
+
+<p>Also available as <code class="language-plaintext highlighter-rouge">target_deltas.ssz</code>.</p>
+
+<h3 id="head_deltasyaml"><code class="language-plaintext highlighter-rouge">head_deltas.yaml</code></h3>
+
+<p>A YAML-encoded <code class="language-plaintext highlighter-rouge">Deltas</code> representing the rewards and penalties returned by the rewards the <code class="language-plaintext highlighter-rouge">get_head_deltas</code> function</p>
+
+<p>Also available as <code class="language-plaintext highlighter-rouge">head_deltas.ssz</code>.</p>
+
+<h3 id="inclusion_delay_deltasyaml"><code class="language-plaintext highlighter-rouge">inclusion_delay_deltas.yaml</code></h3>
+
+<p>A YAML-encoded <code class="language-plaintext highlighter-rouge">Deltas</code> representing the rewards and penalties returned by the rewards the <code class="language-plaintext highlighter-rouge">get_inclusion_delay_deltas</code> function</p>
+
+<p>Also available as <code class="language-plaintext highlighter-rouge">inclusion_delay_deltas.ssz</code>.</p>
+
+<h3 id="inactivity_penalty_deltasyaml"><code class="language-plaintext highlighter-rouge">inactivity_penalty_deltas.yaml</code></h3>
+
+<p>A YAML-encoded <code class="language-plaintext highlighter-rouge">Deltas</code> representing the rewards and penalties returned by the rewards the <code class="language-plaintext highlighter-rouge">get_inactivity_penalty_deltas</code> function</p>
+
+<p>Also available as <code class="language-plaintext highlighter-rouge">inactivity_penalty_deltas.ssz</code>.</p>
+
+<h2 id="condition">Condition</h2>
+
+<p>A handler of the <code class="language-plaintext highlighter-rouge">rewards</code> test-runner should process these cases, 
+ calling the corresponding rewards deltas function for each set of deltas.</p>
+
+<p>The provided pre-state is ready to be input into each rewards deltas function.</p>
+
+<p>The provided <code class="language-plaintext highlighter-rouge">deltas</code> should match the return values of the
+ deltas function. Specifically the following must hold true for each set of deltas:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="n">deltas</span><span class="p">.</span><span class="n">rewards</span> <span class="o">==</span> <span class="n">deltas_function</span><span class="p">(</span><span class="n">state</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">deltas</span><span class="p">.</span><span class="n">penalties</span> <span class="o">==</span> <span class="n">deltas_function</span><span class="p">(</span><span class="n">state</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+</code></pre></div></div>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

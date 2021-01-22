@@ -1,0 +1,205 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="ethereum-20-phase-1--beacon-chain--shard-chain-fork-choice">Ethereum 2.0 Phase 1 – Beacon Chain + Shard Chain Fork Choice</h1>
+
+<p><strong>Notice</strong>: This document is a work-in-progress for researchers and implementers.</p>
+
+<h2 id="table-of-contents">Table of contents</h2>
+
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+<ul>
+  <li><a href="#introduction">Introduction</a></li>
+  <li><a href="#fork-choice">Fork choice</a>
+    <ul>
+      <li><a href="#helpers">Helpers</a>
+        <ul>
+          <li><a href="#get_forkchoice_shard_store"><code class="language-plaintext highlighter-rouge">get_forkchoice_shard_store</code></a></li>
+          <li><a href="#get_shard_latest_attesting_balance"><code class="language-plaintext highlighter-rouge">get_shard_latest_attesting_balance</code></a></li>
+          <li><a href="#get_shard_head"><code class="language-plaintext highlighter-rouge">get_shard_head</code></a></li>
+          <li><a href="#get_shard_ancestor"><code class="language-plaintext highlighter-rouge">get_shard_ancestor</code></a></li>
+          <li><a href="#get_pending_shard_blocks"><code class="language-plaintext highlighter-rouge">get_pending_shard_blocks</code></a></li>
+        </ul>
+      </li>
+      <li><a href="#handlers">Handlers</a>
+        <ul>
+          <li><a href="#on_shard_block"><code class="language-plaintext highlighter-rouge">on_shard_block</code></a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+<h2 id="introduction">Introduction</h2>
+
+<p>This document is the shard chain fork choice spec for part of Ethereum 2.0 Phase 1. It assumes the <a href="/eth2specs/specs/phase1/fork-choice.html">beacon chain fork choice spec</a>.</p>
+
+<h2 id="fork-choice">Fork choice</h2>
+
+<h3 id="helpers">Helpers</h3>
+
+<h4 id="get_forkchoice_shard_store"><code class="language-plaintext highlighter-rouge">get_forkchoice_shard_store</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_forkchoice_shard_store</span><span class="p">(</span><span class="n">anchor_state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">shard</span><span class="p">:</span> <span class="n">Shard</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ShardStore</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">ShardStore</span><span class="p">(</span>
+        <span class="n">shard</span><span class="o">=</span><span class="n">shard</span><span class="p">,</span>
+        <span class="n">signed_blocks</span><span class="o">=</span><span class="p">{</span>
+            <span class="n">anchor_state</span><span class="p">.</span><span class="n">shard_states</span><span class="p">[</span><span class="n">shard</span><span class="p">].</span><span class="n">latest_block_root</span><span class="p">:</span> <span class="n">SignedShardBlock</span><span class="p">(</span>
+                <span class="n">message</span><span class="o">=</span><span class="n">ShardBlock</span><span class="p">(</span><span class="n">slot</span><span class="o">=</span><span class="n">compute_previous_slot</span><span class="p">(</span><span class="n">anchor_state</span><span class="p">.</span><span class="n">slot</span><span class="p">),</span> <span class="n">shard</span><span class="o">=</span><span class="n">shard</span><span class="p">)</span>
+            <span class="p">)</span>
+        <span class="p">},</span>
+        <span class="n">block_states</span><span class="o">=</span><span class="p">{</span><span class="n">anchor_state</span><span class="p">.</span><span class="n">shard_states</span><span class="p">[</span><span class="n">shard</span><span class="p">].</span><span class="n">latest_block_root</span><span class="p">:</span> <span class="n">anchor_state</span><span class="p">.</span><span class="n">copy</span><span class="p">().</span><span class="n">shard_states</span><span class="p">[</span><span class="n">shard</span><span class="p">]},</span>
+    <span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="get_shard_latest_attesting_balance"><code class="language-plaintext highlighter-rouge">get_shard_latest_attesting_balance</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_shard_latest_attesting_balance</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">,</span> <span class="n">shard</span><span class="p">:</span> <span class="n">Shard</span><span class="p">,</span> <span class="n">root</span><span class="p">:</span> <span class="n">Root</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Gwei</span><span class="p">:</span>
+    <span class="n">shard_store</span> <span class="o">=</span> <span class="n">store</span><span class="p">.</span><span class="n">shard_stores</span><span class="p">[</span><span class="n">shard</span><span class="p">]</span>
+    <span class="n">state</span> <span class="o">=</span> <span class="n">store</span><span class="p">.</span><span class="n">checkpoint_states</span><span class="p">[</span><span class="n">store</span><span class="p">.</span><span class="n">justified_checkpoint</span><span class="p">]</span>
+    <span class="n">active_indices</span> <span class="o">=</span> <span class="n">get_active_validator_indices</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">Gwei</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span>
+        <span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">effective_balance</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">active_indices</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="n">i</span> <span class="ow">in</span> <span class="n">shard_store</span><span class="p">.</span><span class="n">latest_messages</span>
+            <span class="c1"># TODO: check the latest message logic: currently, validator's previous vote of another shard
+</span>            <span class="c1"># would be ignored once their newer vote is accepted. Check if it makes sense.
+</span>            <span class="ow">and</span> <span class="n">get_shard_ancestor</span><span class="p">(</span>
+                <span class="n">store</span><span class="p">,</span>
+                <span class="n">shard</span><span class="p">,</span>
+                <span class="n">shard_store</span><span class="p">.</span><span class="n">latest_messages</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">root</span><span class="p">,</span>
+                <span class="n">shard_store</span><span class="p">.</span><span class="n">signed_blocks</span><span class="p">[</span><span class="n">root</span><span class="p">].</span><span class="n">message</span><span class="p">.</span><span class="n">slot</span><span class="p">,</span>
+            <span class="p">)</span> <span class="o">==</span> <span class="n">root</span>
+        <span class="p">)</span>
+    <span class="p">))</span>
+</code></pre></div></div>
+
+<h4 id="get_shard_head"><code class="language-plaintext highlighter-rouge">get_shard_head</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_shard_head</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">,</span> <span class="n">shard</span><span class="p">:</span> <span class="n">Shard</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Root</span><span class="p">:</span>
+    <span class="c1"># Execute the LMD-GHOST fork choice
+</span>    <span class="s">"""
+    Execute the LMD-GHOST fork choice.
+    """</span>
+    <span class="n">shard_store</span> <span class="o">=</span> <span class="n">store</span><span class="p">.</span><span class="n">shard_stores</span><span class="p">[</span><span class="n">shard</span><span class="p">]</span>
+    <span class="n">beacon_head_root</span> <span class="o">=</span> <span class="n">get_head</span><span class="p">(</span><span class="n">store</span><span class="p">)</span>
+    <span class="n">shard_head_state</span> <span class="o">=</span> <span class="n">store</span><span class="p">.</span><span class="n">block_states</span><span class="p">[</span><span class="n">beacon_head_root</span><span class="p">].</span><span class="n">shard_states</span><span class="p">[</span><span class="n">shard</span><span class="p">]</span>
+    <span class="n">shard_head_root</span> <span class="o">=</span> <span class="n">shard_head_state</span><span class="p">.</span><span class="n">latest_block_root</span>
+    <span class="n">shard_blocks</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">root</span><span class="p">:</span> <span class="n">signed_shard_block</span><span class="p">.</span><span class="n">message</span> <span class="k">for</span> <span class="n">root</span><span class="p">,</span> <span class="n">signed_shard_block</span> <span class="ow">in</span> <span class="n">shard_store</span><span class="p">.</span><span class="n">signed_blocks</span><span class="p">.</span><span class="n">items</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">signed_shard_block</span><span class="p">.</span><span class="n">message</span><span class="p">.</span><span class="n">slot</span> <span class="o">&gt;</span> <span class="n">shard_head_state</span><span class="p">.</span><span class="n">slot</span>
+    <span class="p">}</span>
+    <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+        <span class="c1"># Find the valid child block roots
+</span>        <span class="n">children</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">root</span> <span class="k">for</span> <span class="n">root</span><span class="p">,</span> <span class="n">shard_block</span> <span class="ow">in</span> <span class="n">shard_blocks</span><span class="p">.</span><span class="n">items</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">shard_block</span><span class="p">.</span><span class="n">shard_parent_root</span> <span class="o">==</span> <span class="n">shard_head_root</span>
+        <span class="p">]</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">children</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">shard_head_root</span>
+        <span class="c1"># Sort by latest attesting balance with ties broken lexicographically
+</span>        <span class="n">shard_head_root</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span>
+            <span class="n">children</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">root</span><span class="p">:</span> <span class="p">(</span><span class="n">get_shard_latest_attesting_balance</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">shard</span><span class="p">,</span> <span class="n">root</span><span class="p">),</span> <span class="n">root</span><span class="p">)</span>
+        <span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="get_shard_ancestor"><code class="language-plaintext highlighter-rouge">get_shard_ancestor</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_shard_ancestor</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">,</span> <span class="n">shard</span><span class="p">:</span> <span class="n">Shard</span><span class="p">,</span> <span class="n">root</span><span class="p">:</span> <span class="n">Root</span><span class="p">,</span> <span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Root</span><span class="p">:</span>
+    <span class="n">shard_store</span> <span class="o">=</span> <span class="n">store</span><span class="p">.</span><span class="n">shard_stores</span><span class="p">[</span><span class="n">shard</span><span class="p">]</span>
+    <span class="n">block</span> <span class="o">=</span> <span class="n">shard_store</span><span class="p">.</span><span class="n">signed_blocks</span><span class="p">[</span><span class="n">root</span><span class="p">].</span><span class="n">message</span>
+    <span class="k">if</span> <span class="n">block</span><span class="p">.</span><span class="n">slot</span> <span class="o">&gt;</span> <span class="n">slot</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">get_shard_ancestor</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">shard</span><span class="p">,</span> <span class="n">block</span><span class="p">.</span><span class="n">shard_parent_root</span><span class="p">,</span> <span class="n">slot</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">block</span><span class="p">.</span><span class="n">slot</span> <span class="o">==</span> <span class="n">slot</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">root</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># root is older than queried slot, thus a skip slot. Return most recent root prior to slot
+</span>        <span class="k">return</span> <span class="n">root</span>
+</code></pre></div></div>
+
+<h4 id="get_pending_shard_blocks"><code class="language-plaintext highlighter-rouge">get_pending_shard_blocks</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_pending_shard_blocks</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">,</span> <span class="n">shard</span><span class="p">:</span> <span class="n">Shard</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">SignedShardBlock</span><span class="p">]:</span>
+    <span class="s">"""
+    Return the canonical shard block branch that has not yet been crosslinked.
+    """</span>
+    <span class="n">shard_store</span> <span class="o">=</span> <span class="n">store</span><span class="p">.</span><span class="n">shard_stores</span><span class="p">[</span><span class="n">shard</span><span class="p">]</span>
+
+    <span class="n">beacon_head_root</span> <span class="o">=</span> <span class="n">get_head</span><span class="p">(</span><span class="n">store</span><span class="p">)</span>
+    <span class="n">beacon_head_state</span> <span class="o">=</span> <span class="n">store</span><span class="p">.</span><span class="n">block_states</span><span class="p">[</span><span class="n">beacon_head_root</span><span class="p">]</span>
+    <span class="n">latest_shard_block_root</span> <span class="o">=</span> <span class="n">beacon_head_state</span><span class="p">.</span><span class="n">shard_states</span><span class="p">[</span><span class="n">shard</span><span class="p">].</span><span class="n">latest_block_root</span>
+
+    <span class="n">shard_head_root</span> <span class="o">=</span> <span class="n">get_shard_head</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">shard</span><span class="p">)</span>
+    <span class="n">root</span> <span class="o">=</span> <span class="n">shard_head_root</span>
+    <span class="n">signed_shard_blocks</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">while</span> <span class="n">root</span> <span class="o">!=</span> <span class="n">latest_shard_block_root</span><span class="p">:</span>
+        <span class="n">signed_shard_block</span> <span class="o">=</span> <span class="n">shard_store</span><span class="p">.</span><span class="n">signed_blocks</span><span class="p">[</span><span class="n">root</span><span class="p">]</span>
+        <span class="n">signed_shard_blocks</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">signed_shard_block</span><span class="p">)</span>
+        <span class="n">root</span> <span class="o">=</span> <span class="n">signed_shard_block</span><span class="p">.</span><span class="n">message</span><span class="p">.</span><span class="n">shard_parent_root</span>
+
+    <span class="n">signed_shard_blocks</span><span class="p">.</span><span class="n">reverse</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">signed_shard_blocks</span>
+</code></pre></div></div>
+
+<h3 id="handlers">Handlers</h3>
+
+<h4 id="on_shard_block"><code class="language-plaintext highlighter-rouge">on_shard_block</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">on_shard_block</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">,</span> <span class="n">signed_shard_block</span><span class="p">:</span> <span class="n">SignedShardBlock</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">shard_block</span> <span class="o">=</span> <span class="n">signed_shard_block</span><span class="p">.</span><span class="n">message</span>
+    <span class="n">shard</span> <span class="o">=</span> <span class="n">shard_block</span><span class="p">.</span><span class="n">shard</span>
+    <span class="n">shard_store</span> <span class="o">=</span> <span class="n">store</span><span class="p">.</span><span class="n">shard_stores</span><span class="p">[</span><span class="n">shard</span><span class="p">]</span>
+
+    <span class="c1"># Check shard parent exists
+</span>    <span class="k">assert</span> <span class="n">shard_block</span><span class="p">.</span><span class="n">shard_parent_root</span> <span class="ow">in</span> <span class="n">shard_store</span><span class="p">.</span><span class="n">block_states</span>
+    <span class="n">shard_parent_state</span> <span class="o">=</span> <span class="n">shard_store</span><span class="p">.</span><span class="n">block_states</span><span class="p">[</span><span class="n">shard_block</span><span class="p">.</span><span class="n">shard_parent_root</span><span class="p">]</span>
+
+    <span class="c1"># Check beacon parent exists
+</span>    <span class="k">assert</span> <span class="n">shard_block</span><span class="p">.</span><span class="n">beacon_parent_root</span> <span class="ow">in</span> <span class="n">store</span><span class="p">.</span><span class="n">block_states</span>
+    <span class="n">beacon_parent_state</span> <span class="o">=</span> <span class="n">store</span><span class="p">.</span><span class="n">block_states</span><span class="p">[</span><span class="n">shard_block</span><span class="p">.</span><span class="n">beacon_parent_root</span><span class="p">]</span>
+
+    <span class="c1"># Check that block is later than the finalized shard state slot (optimization to reduce calls to get_ancestor)
+</span>    <span class="n">finalized_beacon_state</span> <span class="o">=</span> <span class="n">store</span><span class="p">.</span><span class="n">block_states</span><span class="p">[</span><span class="n">store</span><span class="p">.</span><span class="n">finalized_checkpoint</span><span class="p">.</span><span class="n">root</span><span class="p">]</span>
+    <span class="n">finalized_shard_state</span> <span class="o">=</span> <span class="n">finalized_beacon_state</span><span class="p">.</span><span class="n">shard_states</span><span class="p">[</span><span class="n">shard</span><span class="p">]</span>
+    <span class="k">assert</span> <span class="n">shard_block</span><span class="p">.</span><span class="n">slot</span> <span class="o">&gt;</span> <span class="n">finalized_shard_state</span><span class="p">.</span><span class="n">slot</span>
+
+    <span class="c1"># Check block is a descendant of the finalized block at the checkpoint finalized slot
+</span>    <span class="n">finalized_slot</span> <span class="o">=</span> <span class="n">compute_start_slot_at_epoch</span><span class="p">(</span><span class="n">store</span><span class="p">.</span><span class="n">finalized_checkpoint</span><span class="p">.</span><span class="n">epoch</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="p">(</span>
+        <span class="n">get_ancestor</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">shard_block</span><span class="p">.</span><span class="n">beacon_parent_root</span><span class="p">,</span> <span class="n">finalized_slot</span><span class="p">)</span> <span class="o">==</span> <span class="n">store</span><span class="p">.</span><span class="n">finalized_checkpoint</span><span class="p">.</span><span class="n">root</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Check the block is valid and compute the post-state
+</span>    <span class="n">shard_state</span> <span class="o">=</span> <span class="n">shard_parent_state</span><span class="p">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">shard_state_transition</span><span class="p">(</span><span class="n">shard_state</span><span class="p">,</span> <span class="n">signed_shard_block</span><span class="p">,</span> <span class="n">beacon_parent_state</span><span class="p">,</span> <span class="n">validate_result</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+    <span class="c1"># Add new block to the store
+</span>    <span class="c1"># Note: storing `SignedShardBlock` format for computing `ShardTransition.proposer_signature_aggregate` 
+</span>    <span class="n">shard_store</span><span class="p">.</span><span class="n">signed_blocks</span><span class="p">[</span><span class="n">hash_tree_root</span><span class="p">(</span><span class="n">shard_block</span><span class="p">)]</span> <span class="o">=</span> <span class="n">signed_shard_block</span>
+
+    <span class="c1"># Add new state for this block to the store
+</span>    <span class="n">shard_store</span><span class="p">.</span><span class="n">block_states</span><span class="p">[</span><span class="n">hash_tree_root</span><span class="p">(</span><span class="n">shard_block</span><span class="p">)]</span> <span class="o">=</span> <span class="n">shard_state</span>
+</code></pre></div></div>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

@@ -1,0 +1,41 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="eth2-config-util">Eth2 config util</h1>
+
+<p>For configuration, see <a href="/eth2specs/configs/">Configs documentation</a>.</p>
+
+<h2 id="usage">Usage:</h2>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">configs_path</span> <span class="o">=</span> <span class="s">'configs/'</span>
+
+<span class="p">...</span>
+
+<span class="kn">from</span> <span class="nn">eth2spec.config</span> <span class="kn">import</span> <span class="n">config_util</span>
+<span class="kn">from</span> <span class="nn">eth2spec.phase0</span> <span class="kn">import</span> <span class="n">spec</span>
+<span class="kn">from</span> <span class="nn">importlib</span> <span class="kn">import</span> <span class="nb">reload</span>
+<span class="n">config_util</span><span class="p">.</span><span class="n">prepare_config</span><span class="p">(</span><span class="n">configs_path</span><span class="p">,</span> <span class="s">'mainnet'</span><span class="p">)</span>
+<span class="c1"># reload spec to make loaded config effective
+</span><span class="nb">reload</span><span class="p">(</span><span class="n">spec</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>WARNING: this overwrites globals, make sure to prevent accidental collisions with other usage of the same imported specs package.</p>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

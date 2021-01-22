@@ -1,0 +1,67 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="genesis-creation-testing">Genesis creation testing</h1>
+
+<p>Tests the initialization of a genesis state based on Eth1 data.</p>
+
+<h2 id="test-case-format">Test case format</h2>
+
+<h3 id="eth1_block_hashyaml"><code class="language-plaintext highlighter-rouge">eth1_block_hash.yaml</code></h3>
+
+<p>A <code class="language-plaintext highlighter-rouge">Bytes32</code> hex encoded, with prefix 0x. The root of the Eth1 block.</p>
+
+<p>Also available as <code class="language-plaintext highlighter-rouge">eth1_block_hash.ssz</code>.</p>
+
+<h3 id="eth1_timestampyaml"><code class="language-plaintext highlighter-rouge">eth1_timestamp.yaml</code></h3>
+
+<p>An integer. The timestamp of the block, in seconds.</p>
+
+<h3 id="metayaml"><code class="language-plaintext highlighter-rouge">meta.yaml</code></h3>
+
+<p>A yaml file to help read the deposit count:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">deposits_count</span><span class="pi">:</span> <span class="s">int    -- Amount of deposits.</span>
+</code></pre></div></div>
+
+<h3 id="deposits_indexyaml"><code class="language-plaintext highlighter-rouge">deposits_&lt;index&gt;.yaml</code></h3>
+
+<p>A series of files, with <code class="language-plaintext highlighter-rouge">&lt;index&gt;</code> in range <code class="language-plaintext highlighter-rouge">[0, deposits_count)</code>. Deposits need to be processed in order.
+Each file is a YAML-encoded <code class="language-plaintext highlighter-rouge">Deposit</code> object.</p>
+
+<p>Each deposit is also available as <code class="language-plaintext highlighter-rouge">deposits_&lt;index&gt;.ssz</code>.</p>
+
+<h3 id="stateyaml"><code class="language-plaintext highlighter-rouge">state.yaml</code></h3>
+
+<p>The expected genesis state. A YAML-encoded <code class="language-plaintext highlighter-rouge">BeaconState</code> object.</p>
+
+<p>Also available as <code class="language-plaintext highlighter-rouge">state.ssz</code>.</p>
+
+<h2 id="processing">Processing</h2>
+
+<p>To process this test, build a genesis state with the provided <code class="language-plaintext highlighter-rouge">eth1_block_hash</code>, <code class="language-plaintext highlighter-rouge">eth1_timestamp</code> and <code class="language-plaintext highlighter-rouge">deposits</code>:
+<code class="language-plaintext highlighter-rouge">initialize_beacon_state_from_eth1(eth1_block_hash, eth1_timestamp, deposits)</code>,
+ as described in the Beacon Chain specification.</p>
+
+<h2 id="condition">Condition</h2>
+
+<p>The resulting state should match the expected <code class="language-plaintext highlighter-rouge">state</code>.</p>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

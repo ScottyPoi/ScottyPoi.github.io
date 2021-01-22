@@ -1,0 +1,1261 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="ethereum-20-phase-1--the-beacon-chain-with-shards">Ethereum 2.0 Phase 1 – The Beacon Chain with Shards</h1>
+
+<p><strong>Notice</strong>: This document is a work-in-progress for researchers and implementers.</p>
+
+<h2 id="table-of-contents">Table of contents</h2>
+
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+<ul>
+  <li><a href="#introduction">Introduction</a></li>
+  <li><a href="#custom-types">Custom types</a></li>
+  <li><a href="#configuration">Configuration</a>
+    <ul>
+      <li><a href="#misc">Misc</a></li>
+      <li><a href="#shard-block-configs">Shard block configs</a></li>
+      <li><a href="#gwei-values">Gwei values</a></li>
+      <li><a href="#initial-values">Initial values</a></li>
+      <li><a href="#time-parameters">Time parameters</a></li>
+      <li><a href="#domain-types">Domain types</a></li>
+    </ul>
+  </li>
+  <li><a href="#updated-containers">Updated containers</a>
+    <ul>
+      <li><a href="#extended-attestationdata">Extended <code class="language-plaintext highlighter-rouge">AttestationData</code></a></li>
+      <li><a href="#extended-attestation">Extended <code class="language-plaintext highlighter-rouge">Attestation</code></a></li>
+      <li><a href="#extended-pendingattestation">Extended <code class="language-plaintext highlighter-rouge">PendingAttestation</code></a></li>
+      <li><a href="#extended-indexedattestation">Extended <code class="language-plaintext highlighter-rouge">IndexedAttestation</code></a></li>
+      <li><a href="#extended-attesterslashing">Extended <code class="language-plaintext highlighter-rouge">AttesterSlashing</code></a></li>
+      <li><a href="#extended-validator">Extended <code class="language-plaintext highlighter-rouge">Validator</code></a></li>
+      <li><a href="#extended-beaconblockbody">Extended <code class="language-plaintext highlighter-rouge">BeaconBlockBody</code></a></li>
+      <li><a href="#extended-beaconblock">Extended <code class="language-plaintext highlighter-rouge">BeaconBlock</code></a>
+        <ul>
+          <li><a href="#extended-signedbeaconblock">Extended <code class="language-plaintext highlighter-rouge">SignedBeaconBlock</code></a></li>
+        </ul>
+      </li>
+      <li><a href="#extended-beaconstate">Extended <code class="language-plaintext highlighter-rouge">BeaconState</code></a></li>
+    </ul>
+  </li>
+  <li><a href="#new-containers">New containers</a>
+    <ul>
+      <li><a href="#shardblock"><code class="language-plaintext highlighter-rouge">ShardBlock</code></a></li>
+      <li><a href="#signedshardblock"><code class="language-plaintext highlighter-rouge">SignedShardBlock</code></a></li>
+      <li><a href="#shardblockheader"><code class="language-plaintext highlighter-rouge">ShardBlockHeader</code></a></li>
+      <li><a href="#shardstate"><code class="language-plaintext highlighter-rouge">ShardState</code></a></li>
+      <li><a href="#shardtransition"><code class="language-plaintext highlighter-rouge">ShardTransition</code></a></li>
+      <li><a href="#compactcommittee"><code class="language-plaintext highlighter-rouge">CompactCommittee</code></a></li>
+    </ul>
+  </li>
+  <li><a href="#helper-functions">Helper functions</a>
+    <ul>
+      <li><a href="#misc-1">Misc</a>
+        <ul>
+          <li><a href="#compute_previous_slot"><code class="language-plaintext highlighter-rouge">compute_previous_slot</code></a></li>
+          <li><a href="#pack_compact_validator"><code class="language-plaintext highlighter-rouge">pack_compact_validator</code></a></li>
+          <li><a href="#unpack_compact_validator"><code class="language-plaintext highlighter-rouge">unpack_compact_validator</code></a></li>
+          <li><a href="#committee_to_compact_committee"><code class="language-plaintext highlighter-rouge">committee_to_compact_committee</code></a></li>
+          <li><a href="#compute_shard_from_committee_index"><code class="language-plaintext highlighter-rouge">compute_shard_from_committee_index</code></a></li>
+          <li><a href="#compute_offset_slots"><code class="language-plaintext highlighter-rouge">compute_offset_slots</code></a></li>
+          <li><a href="#compute_updated_gasprice"><code class="language-plaintext highlighter-rouge">compute_updated_gasprice</code></a></li>
+          <li><a href="#compute_committee_source_epoch"><code class="language-plaintext highlighter-rouge">compute_committee_source_epoch</code></a></li>
+        </ul>
+      </li>
+      <li><a href="#beacon-state-accessors">Beacon state accessors</a>
+        <ul>
+          <li><a href="#updated-get_committee_count_per_slot">Updated <code class="language-plaintext highlighter-rouge">get_committee_count_per_slot</code></a></li>
+          <li><a href="#get_active_shard_count"><code class="language-plaintext highlighter-rouge">get_active_shard_count</code></a></li>
+          <li><a href="#get_online_validator_indices"><code class="language-plaintext highlighter-rouge">get_online_validator_indices</code></a></li>
+          <li><a href="#get_shard_committee"><code class="language-plaintext highlighter-rouge">get_shard_committee</code></a></li>
+          <li><a href="#get_light_client_committee"><code class="language-plaintext highlighter-rouge">get_light_client_committee</code></a></li>
+          <li><a href="#get_shard_proposer_index"><code class="language-plaintext highlighter-rouge">get_shard_proposer_index</code></a></li>
+          <li><a href="#get_committee_count_delta"><code class="language-plaintext highlighter-rouge">get_committee_count_delta</code></a></li>
+          <li><a href="#get_start_shard"><code class="language-plaintext highlighter-rouge">get_start_shard</code></a></li>
+          <li><a href="#get_latest_slot_for_shard"><code class="language-plaintext highlighter-rouge">get_latest_slot_for_shard</code></a></li>
+          <li><a href="#get_offset_slots"><code class="language-plaintext highlighter-rouge">get_offset_slots</code></a></li>
+        </ul>
+      </li>
+      <li><a href="#predicates">Predicates</a>
+        <ul>
+          <li><a href="#is_on_time_attestation"><code class="language-plaintext highlighter-rouge">is_on_time_attestation</code></a></li>
+          <li><a href="#is_winning_attestation"><code class="language-plaintext highlighter-rouge">is_winning_attestation</code></a></li>
+          <li><a href="#optional_aggregate_verify"><code class="language-plaintext highlighter-rouge">optional_aggregate_verify</code></a></li>
+          <li><a href="#optional_fast_aggregate_verify"><code class="language-plaintext highlighter-rouge">optional_fast_aggregate_verify</code></a></li>
+        </ul>
+      </li>
+      <li><a href="#block-processing">Block processing</a>
+        <ul>
+          <li><a href="#operations">Operations</a>
+            <ul>
+              <li><a href="#new-attestation-processing">New Attestation processing</a>
+                <ul>
+                  <li><a href="#validate_attestation"><code class="language-plaintext highlighter-rouge">validate_attestation</code></a></li>
+                  <li><a href="#updated-process_attestation">Updated <code class="language-plaintext highlighter-rouge">process_attestation</code></a></li>
+                </ul>
+              </li>
+              <li><a href="#shard-transition-processing">Shard transition processing</a>
+                <ul>
+                  <li><a href="#apply_shard_transition"><code class="language-plaintext highlighter-rouge">apply_shard_transition</code></a></li>
+                  <li><a href="#process_crosslink_for_shard"><code class="language-plaintext highlighter-rouge">process_crosslink_for_shard</code></a></li>
+                  <li><a href="#process_crosslinks"><code class="language-plaintext highlighter-rouge">process_crosslinks</code></a></li>
+                  <li><a href="#verify_empty_shard_transition"><code class="language-plaintext highlighter-rouge">verify_empty_shard_transition</code></a></li>
+                  <li><a href="#process_shard_transitions"><code class="language-plaintext highlighter-rouge">process_shard_transitions</code></a></li>
+                </ul>
+              </li>
+              <li><a href="#new-default-validator-for-deposits">New default validator for deposits</a></li>
+            </ul>
+          </li>
+          <li><a href="#light-client-processing">Light client processing</a></li>
+        </ul>
+      </li>
+      <li><a href="#epoch-transition">Epoch transition</a>
+        <ul>
+          <li><a href="#phase-1-final-updates">Phase 1 final updates</a></li>
+          <li><a href="#custody-game-updates">Custody game updates</a></li>
+          <li><a href="#online-tracking">Online-tracking</a></li>
+          <li><a href="#light-client-committee-updates">Light client committee updates</a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+<h2 id="introduction">Introduction</h2>
+
+<p>This document describes the extensions made to the Phase 0 design of The Beacon Chain
+ to facilitate the new shards as part of Phase 1 of Eth2.</p>
+
+<h2 id="custom-types">Custom types</h2>
+
+<p>We define the following Python custom types for type hinting and readability:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>SSZ equivalent</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Shard</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64</code></td>
+      <td>a shard number</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">OnlineEpochs</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint8</code></td>
+      <td>online countdown epochs</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="configuration">Configuration</h2>
+
+<p>Configuration is not namespaced. Instead it is strictly an extension;
+ no constants of phase 0 change, but new constants are adopted for changing behaviors.</p>
+
+<h3 id="misc">Misc</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">MAX_SHARDS</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**10)</code> (= 1024)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">INITIAL_ACTIVE_SHARDS</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**6)</code> (= 64)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">LIGHT_CLIENT_COMMITTEE_SIZE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**7)</code> (= 128)</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GASPRICE_ADJUSTMENT_COEFFICIENT</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**3)</code> (= 8)</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="shard-block-configs">Shard block configs</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+      <th>Unit</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">MAX_SHARD_BLOCK_SIZE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**20)</code> (= 1,048,576)</td>
+      <td>bytes</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">TARGET_SHARD_BLOCK_SIZE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**18)</code> (= 262,144)</td>
+      <td>bytes</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">SHARD_BLOCK_OFFSETS</code></td>
+      <td><code class="language-plaintext highlighter-rouge">List[uint64, 12]([1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233])</code></td>
+      <td>-</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">MAX_SHARD_BLOCKS_PER_ATTESTATION</code></td>
+      <td><code class="language-plaintext highlighter-rouge">len(SHARD_BLOCK_OFFSETS)</code></td>
+      <td>-</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">BYTES_PER_CUSTODY_CHUNK</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**12)</code> (= 4,096)</td>
+      <td>bytes</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">CUSTODY_RESPONSE_DEPTH</code></td>
+      <td><code class="language-plaintext highlighter-rouge">ceillog2(MAX_SHARD_BLOCK_SIZE // BYTES_PER_CUSTODY_CHUNK)</code></td>
+      <td>-</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="gwei-values">Gwei values</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+      <th> </th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">MAX_GASPRICE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">Gwei(2**14)</code> (= 16,384)</td>
+      <td>Gwei</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">MIN_GASPRICE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">Gwei(2**3)</code> (= 8)</td>
+      <td>Gwei</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="initial-values">Initial values</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">NO_SIGNATURE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">BLSSignature(b'\x00' * 96)</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="time-parameters">Time parameters</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+      <th style="text-align: center">Unit</th>
+      <th style="text-align: center">Duration</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">ONLINE_PERIOD</code></td>
+      <td><code class="language-plaintext highlighter-rouge">OnlineEpochs(2**3)</code> (= 8)</td>
+      <td style="text-align: center">online epochs</td>
+      <td style="text-align: center">~51 mins</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">LIGHT_CLIENT_COMMITTEE_PERIOD</code></td>
+      <td><code class="language-plaintext highlighter-rouge">Epoch(2**8)</code> (= 256)</td>
+      <td style="text-align: center">epochs</td>
+      <td style="text-align: center">~27 hours</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="domain-types">Domain types</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DOMAIN_SHARD_PROPOSAL</code></td>
+      <td><code class="language-plaintext highlighter-rouge">DomainType('0x80000000')</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DOMAIN_SHARD_COMMITTEE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">DomainType('0x81000000')</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DOMAIN_LIGHT_CLIENT</code></td>
+      <td><code class="language-plaintext highlighter-rouge">DomainType('0x82000000')</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DOMAIN_CUSTODY_BIT_SLASHING</code></td>
+      <td><code class="language-plaintext highlighter-rouge">DomainType('0x83000000')</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DOMAIN_LIGHT_SELECTION_PROOF</code></td>
+      <td><code class="language-plaintext highlighter-rouge">DomainType('0x84000000')</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DOMAIN_LIGHT_AGGREGATE_AND_PROOF</code></td>
+      <td><code class="language-plaintext highlighter-rouge">DomainType('0x85000000')</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="updated-containers">Updated containers</h2>
+
+<p>The following containers have updated definitions in Phase 1.</p>
+
+<h3 id="extended-attestationdata">Extended <code class="language-plaintext highlighter-rouge">AttestationData</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">AttestationData</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span>
+    <span class="n">index</span><span class="p">:</span> <span class="n">CommitteeIndex</span>
+    <span class="c1"># LMD GHOST vote
+</span>    <span class="n">beacon_block_root</span><span class="p">:</span> <span class="n">Root</span>
+    <span class="c1"># FFG vote
+</span>    <span class="n">source</span><span class="p">:</span> <span class="n">Checkpoint</span>
+    <span class="n">target</span><span class="p">:</span> <span class="n">Checkpoint</span>
+    <span class="c1"># Shard vote
+</span>    <span class="n">shard</span><span class="p">:</span> <span class="n">Shard</span>
+    <span class="c1"># Current-slot shard block root
+</span>    <span class="n">shard_head_root</span><span class="p">:</span> <span class="n">Root</span>
+    <span class="c1"># Shard transition root
+</span>    <span class="n">shard_transition_root</span><span class="p">:</span> <span class="n">Root</span>
+</code></pre></div></div>
+
+<h3 id="extended-attestation">Extended <code class="language-plaintext highlighter-rouge">Attestation</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">Attestation</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">aggregation_bits</span><span class="p">:</span> <span class="n">Bitlist</span><span class="p">[</span><span class="n">MAX_VALIDATORS_PER_COMMITTEE</span><span class="p">]</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">AttestationData</span>
+    <span class="n">signature</span><span class="p">:</span> <span class="n">BLSSignature</span>
+</code></pre></div></div>
+
+<h3 id="extended-pendingattestation">Extended <code class="language-plaintext highlighter-rouge">PendingAttestation</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">PendingAttestation</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">aggregation_bits</span><span class="p">:</span> <span class="n">Bitlist</span><span class="p">[</span><span class="n">MAX_VALIDATORS_PER_COMMITTEE</span><span class="p">]</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">AttestationData</span>
+    <span class="n">inclusion_delay</span><span class="p">:</span> <span class="n">Slot</span>
+    <span class="n">proposer_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span>
+    <span class="c1"># Phase 1
+</span>    <span class="n">crosslink_success</span><span class="p">:</span> <span class="n">boolean</span>
+</code></pre></div></div>
+
+<h3 id="extended-indexedattestation">Extended <code class="language-plaintext highlighter-rouge">IndexedAttestation</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">IndexedAttestation</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">attesting_indices</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">ValidatorIndex</span><span class="p">,</span> <span class="n">MAX_VALIDATORS_PER_COMMITTEE</span><span class="p">]</span>
+    <span class="n">data</span><span class="p">:</span> <span class="n">AttestationData</span>
+    <span class="n">signature</span><span class="p">:</span> <span class="n">BLSSignature</span>
+</code></pre></div></div>
+
+<h3 id="extended-attesterslashing">Extended <code class="language-plaintext highlighter-rouge">AttesterSlashing</code></h3>
+
+<p>Note that the <code class="language-plaintext highlighter-rouge">attestation_1</code> and <code class="language-plaintext highlighter-rouge">attestation_2</code> have a new <code class="language-plaintext highlighter-rouge">IndexedAttestation</code> definition.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">AttesterSlashing</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">attestation_1</span><span class="p">:</span> <span class="n">IndexedAttestation</span>
+    <span class="n">attestation_2</span><span class="p">:</span> <span class="n">IndexedAttestation</span>
+</code></pre></div></div>
+
+<h3 id="extended-validator">Extended <code class="language-plaintext highlighter-rouge">Validator</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">Validator</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">pubkey</span><span class="p">:</span> <span class="n">BLSPubkey</span>
+    <span class="n">withdrawal_credentials</span><span class="p">:</span> <span class="n">Bytes32</span>  <span class="c1"># Commitment to pubkey for withdrawals
+</span>    <span class="n">effective_balance</span><span class="p">:</span> <span class="n">Gwei</span>  <span class="c1"># Balance at stake
+</span>    <span class="n">slashed</span><span class="p">:</span> <span class="n">boolean</span>
+    <span class="c1"># Status epochs
+</span>    <span class="n">activation_eligibility_epoch</span><span class="p">:</span> <span class="n">Epoch</span>  <span class="c1"># When criteria for activation were met
+</span>    <span class="n">activation_epoch</span><span class="p">:</span> <span class="n">Epoch</span>
+    <span class="n">exit_epoch</span><span class="p">:</span> <span class="n">Epoch</span>
+    <span class="n">withdrawable_epoch</span><span class="p">:</span> <span class="n">Epoch</span>  <span class="c1"># When validator can withdraw funds
+</span>    <span class="c1"># Custody game
+</span>    <span class="c1"># next_custody_secret_to_reveal is initialised to the custody period
+</span>    <span class="c1"># (of the particular validator) in which the validator is activated
+</span>    <span class="c1"># = get_custody_period_for_validator(...)
+</span>    <span class="n">next_custody_secret_to_reveal</span><span class="p">:</span> <span class="n">uint64</span>
+    <span class="c1"># TODO: The max_reveal_lateness doesn't really make sense anymore.
+</span>    <span class="c1"># So how do we incentivise early custody key reveals now?
+</span>    <span class="n">all_custody_secrets_revealed_epoch</span><span class="p">:</span> <span class="n">Epoch</span>  <span class="c1"># to be initialized to FAR_FUTURE_EPOCH
+</span></code></pre></div></div>
+
+<h3 id="extended-beaconblockbody">Extended <code class="language-plaintext highlighter-rouge">BeaconBlockBody</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">BeaconBlockBody</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">randao_reveal</span><span class="p">:</span> <span class="n">BLSSignature</span>
+    <span class="n">eth1_data</span><span class="p">:</span> <span class="n">Eth1Data</span>  <span class="c1"># Eth1 data vote
+</span>    <span class="n">graffiti</span><span class="p">:</span> <span class="n">Bytes32</span>  <span class="c1"># Arbitrary data
+</span>    <span class="c1"># Slashings
+</span>    <span class="n">proposer_slashings</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">ProposerSlashing</span><span class="p">,</span> <span class="n">MAX_PROPOSER_SLASHINGS</span><span class="p">]</span>
+    <span class="n">attester_slashings</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">AttesterSlashing</span><span class="p">,</span> <span class="n">MAX_ATTESTER_SLASHINGS</span><span class="p">]</span>
+    <span class="c1"># Attesting
+</span>    <span class="n">attestations</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Attestation</span><span class="p">,</span> <span class="n">MAX_ATTESTATIONS</span><span class="p">]</span>
+    <span class="c1"># Entry &amp; exit
+</span>    <span class="n">deposits</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Deposit</span><span class="p">,</span> <span class="n">MAX_DEPOSITS</span><span class="p">]</span>
+    <span class="n">voluntary_exits</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">SignedVoluntaryExit</span><span class="p">,</span> <span class="n">MAX_VOLUNTARY_EXITS</span><span class="p">]</span>
+    <span class="c1"># Custody game
+</span>    <span class="n">chunk_challenges</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">CustodyChunkChallenge</span><span class="p">,</span> <span class="n">MAX_CUSTODY_CHUNK_CHALLENGES</span><span class="p">]</span>
+    <span class="n">chunk_challenge_responses</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">CustodyChunkResponse</span><span class="p">,</span> <span class="n">MAX_CUSTODY_CHUNK_CHALLENGE_RESPONSES</span><span class="p">]</span>
+    <span class="n">custody_key_reveals</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">CustodyKeyReveal</span><span class="p">,</span> <span class="n">MAX_CUSTODY_KEY_REVEALS</span><span class="p">]</span>
+    <span class="n">early_derived_secret_reveals</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">EarlyDerivedSecretReveal</span><span class="p">,</span> <span class="n">MAX_EARLY_DERIVED_SECRET_REVEALS</span><span class="p">]</span>
+    <span class="n">custody_slashings</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">SignedCustodySlashing</span><span class="p">,</span> <span class="n">MAX_CUSTODY_SLASHINGS</span><span class="p">]</span>
+    <span class="c1"># Shards
+</span>    <span class="n">shard_transitions</span><span class="p">:</span> <span class="n">Vector</span><span class="p">[</span><span class="n">ShardTransition</span><span class="p">,</span> <span class="n">MAX_SHARDS</span><span class="p">]</span>
+    <span class="c1"># Light clients
+</span>    <span class="n">light_client_bits</span><span class="p">:</span> <span class="n">Bitvector</span><span class="p">[</span><span class="n">LIGHT_CLIENT_COMMITTEE_SIZE</span><span class="p">]</span>
+    <span class="n">light_client_signature</span><span class="p">:</span> <span class="n">BLSSignature</span>
+</code></pre></div></div>
+
+<h3 id="extended-beaconblock">Extended <code class="language-plaintext highlighter-rouge">BeaconBlock</code></h3>
+
+<p>Note that the <code class="language-plaintext highlighter-rouge">body</code> has a new <code class="language-plaintext highlighter-rouge">BeaconBlockBody</code> definition.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">BeaconBlock</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span>
+    <span class="n">proposer_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span>
+    <span class="n">parent_root</span><span class="p">:</span> <span class="n">Root</span>
+    <span class="n">state_root</span><span class="p">:</span> <span class="n">Root</span>
+    <span class="n">body</span><span class="p">:</span> <span class="n">BeaconBlockBody</span>
+</code></pre></div></div>
+
+<h4 id="extended-signedbeaconblock">Extended <code class="language-plaintext highlighter-rouge">SignedBeaconBlock</code></h4>
+
+<p>Note that the <code class="language-plaintext highlighter-rouge">message</code> has a new <code class="language-plaintext highlighter-rouge">BeaconBlock</code> definition.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">SignedBeaconBlock</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">message</span><span class="p">:</span> <span class="n">BeaconBlock</span>
+    <span class="n">signature</span><span class="p">:</span> <span class="n">BLSSignature</span>
+</code></pre></div></div>
+
+<h3 id="extended-beaconstate">Extended <code class="language-plaintext highlighter-rouge">BeaconState</code></h3>
+
+<p>Note that aside from the new additions, <code class="language-plaintext highlighter-rouge">Validator</code> and <code class="language-plaintext highlighter-rouge">PendingAttestation</code> have new definitions.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">BeaconState</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="c1"># Versioning
+</span>    <span class="n">genesis_time</span><span class="p">:</span> <span class="n">uint64</span>
+    <span class="n">genesis_validators_root</span><span class="p">:</span> <span class="n">Root</span>
+    <span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span>
+    <span class="n">fork</span><span class="p">:</span> <span class="n">Fork</span>
+    <span class="c1"># History
+</span>    <span class="n">latest_block_header</span><span class="p">:</span> <span class="n">BeaconBlockHeader</span>
+    <span class="n">block_roots</span><span class="p">:</span> <span class="n">Vector</span><span class="p">[</span><span class="n">Root</span><span class="p">,</span> <span class="n">SLOTS_PER_HISTORICAL_ROOT</span><span class="p">]</span>
+    <span class="n">state_roots</span><span class="p">:</span> <span class="n">Vector</span><span class="p">[</span><span class="n">Root</span><span class="p">,</span> <span class="n">SLOTS_PER_HISTORICAL_ROOT</span><span class="p">]</span>
+    <span class="n">historical_roots</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Root</span><span class="p">,</span> <span class="n">HISTORICAL_ROOTS_LIMIT</span><span class="p">]</span>
+    <span class="c1"># Eth1
+</span>    <span class="n">eth1_data</span><span class="p">:</span> <span class="n">Eth1Data</span>
+    <span class="n">eth1_data_votes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Eth1Data</span><span class="p">,</span> <span class="n">EPOCHS_PER_ETH1_VOTING_PERIOD</span> <span class="o">*</span> <span class="n">SLOTS_PER_EPOCH</span><span class="p">]</span>
+    <span class="n">eth1_deposit_index</span><span class="p">:</span> <span class="n">uint64</span>
+    <span class="c1"># Registry
+</span>    <span class="n">validators</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Validator</span><span class="p">,</span> <span class="n">VALIDATOR_REGISTRY_LIMIT</span><span class="p">]</span>
+    <span class="n">balances</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Gwei</span><span class="p">,</span> <span class="n">VALIDATOR_REGISTRY_LIMIT</span><span class="p">]</span>
+    <span class="c1"># Randomness
+</span>    <span class="n">randao_mixes</span><span class="p">:</span> <span class="n">Vector</span><span class="p">[</span><span class="n">Root</span><span class="p">,</span> <span class="n">EPOCHS_PER_HISTORICAL_VECTOR</span><span class="p">]</span>
+    <span class="c1"># Slashings
+</span>    <span class="n">slashings</span><span class="p">:</span> <span class="n">Vector</span><span class="p">[</span><span class="n">Gwei</span><span class="p">,</span> <span class="n">EPOCHS_PER_SLASHINGS_VECTOR</span><span class="p">]</span>  <span class="c1"># Per-epoch sums of slashed effective balances
+</span>    <span class="c1"># Attestations
+</span>    <span class="n">previous_epoch_attestations</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">PendingAttestation</span><span class="p">,</span> <span class="n">MAX_ATTESTATIONS</span> <span class="o">*</span> <span class="n">SLOTS_PER_EPOCH</span><span class="p">]</span>
+    <span class="n">current_epoch_attestations</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">PendingAttestation</span><span class="p">,</span> <span class="n">MAX_ATTESTATIONS</span> <span class="o">*</span> <span class="n">SLOTS_PER_EPOCH</span><span class="p">]</span>
+    <span class="c1"># Finality
+</span>    <span class="n">justification_bits</span><span class="p">:</span> <span class="n">Bitvector</span><span class="p">[</span><span class="n">JUSTIFICATION_BITS_LENGTH</span><span class="p">]</span>  <span class="c1"># Bit set for every recent justified epoch
+</span>    <span class="n">previous_justified_checkpoint</span><span class="p">:</span> <span class="n">Checkpoint</span>  <span class="c1"># Previous epoch snapshot
+</span>    <span class="n">current_justified_checkpoint</span><span class="p">:</span> <span class="n">Checkpoint</span>
+    <span class="n">finalized_checkpoint</span><span class="p">:</span> <span class="n">Checkpoint</span>
+    <span class="c1"># Phase 1
+</span>    <span class="n">current_epoch_start_shard</span><span class="p">:</span> <span class="n">Shard</span>
+    <span class="n">shard_states</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">ShardState</span><span class="p">,</span> <span class="n">MAX_SHARDS</span><span class="p">]</span>
+    <span class="n">online_countdown</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">OnlineEpochs</span><span class="p">,</span> <span class="n">VALIDATOR_REGISTRY_LIMIT</span><span class="p">]</span>  <span class="c1"># not a raw byte array, considered its large size.
+</span>    <span class="n">current_light_committee</span><span class="p">:</span> <span class="n">CompactCommittee</span>
+    <span class="n">next_light_committee</span><span class="p">:</span> <span class="n">CompactCommittee</span>
+    <span class="c1"># Custody game
+</span>    <span class="c1"># Future derived secrets already exposed; contains the indices of the exposed validator
+</span>    <span class="c1"># at RANDAO reveal period % EARLY_DERIVED_SECRET_PENALTY_MAX_FUTURE_EPOCHS
+</span>    <span class="n">exposed_derived_secrets</span><span class="p">:</span> <span class="n">Vector</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">ValidatorIndex</span><span class="p">,</span> <span class="n">MAX_EARLY_DERIVED_SECRET_REVEALS</span> <span class="o">*</span> <span class="n">SLOTS_PER_EPOCH</span><span class="p">],</span>
+                                    <span class="n">EARLY_DERIVED_SECRET_PENALTY_MAX_FUTURE_EPOCHS</span><span class="p">]</span>
+    <span class="n">custody_chunk_challenge_records</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">CustodyChunkChallengeRecord</span><span class="p">,</span> <span class="n">MAX_CUSTODY_CHUNK_CHALLENGE_RECORDS</span><span class="p">]</span>
+    <span class="n">custody_chunk_challenge_index</span><span class="p">:</span> <span class="n">uint64</span>
+</code></pre></div></div>
+
+<h2 id="new-containers">New containers</h2>
+
+<p>The following containers are new in Phase 1.</p>
+
+<h3 id="shardblock"><code class="language-plaintext highlighter-rouge">ShardBlock</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">ShardBlock</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">shard_parent_root</span><span class="p">:</span> <span class="n">Root</span>
+    <span class="n">beacon_parent_root</span><span class="p">:</span> <span class="n">Root</span>
+    <span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span>
+    <span class="n">shard</span><span class="p">:</span> <span class="n">Shard</span>
+    <span class="n">proposer_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span>
+    <span class="n">body</span><span class="p">:</span> <span class="n">ByteList</span><span class="p">[</span><span class="n">MAX_SHARD_BLOCK_SIZE</span><span class="p">]</span>
+</code></pre></div></div>
+
+<h3 id="signedshardblock"><code class="language-plaintext highlighter-rouge">SignedShardBlock</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">SignedShardBlock</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">message</span><span class="p">:</span> <span class="n">ShardBlock</span>
+    <span class="n">signature</span><span class="p">:</span> <span class="n">BLSSignature</span>
+</code></pre></div></div>
+
+<h3 id="shardblockheader"><code class="language-plaintext highlighter-rouge">ShardBlockHeader</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">ShardBlockHeader</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">shard_parent_root</span><span class="p">:</span> <span class="n">Root</span>
+    <span class="n">beacon_parent_root</span><span class="p">:</span> <span class="n">Root</span>
+    <span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span>
+    <span class="n">shard</span><span class="p">:</span> <span class="n">Shard</span>
+    <span class="n">proposer_index</span><span class="p">:</span> <span class="n">ValidatorIndex</span>
+    <span class="n">body_root</span><span class="p">:</span> <span class="n">Root</span>
+</code></pre></div></div>
+
+<h3 id="shardstate"><code class="language-plaintext highlighter-rouge">ShardState</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">ShardState</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span>
+    <span class="n">gasprice</span><span class="p">:</span> <span class="n">Gwei</span>
+    <span class="n">latest_block_root</span><span class="p">:</span> <span class="n">Root</span>
+</code></pre></div></div>
+
+<h3 id="shardtransition"><code class="language-plaintext highlighter-rouge">ShardTransition</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">ShardTransition</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="c1"># Starting from slot
+</span>    <span class="n">start_slot</span><span class="p">:</span> <span class="n">Slot</span>
+    <span class="c1"># Shard block lengths
+</span>    <span class="n">shard_block_lengths</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">uint64</span><span class="p">,</span> <span class="n">MAX_SHARD_BLOCKS_PER_ATTESTATION</span><span class="p">]</span>
+    <span class="c1"># Shard data roots
+</span>    <span class="c1"># The root is of ByteList[MAX_SHARD_BLOCK_SIZE]
+</span>    <span class="n">shard_data_roots</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Bytes32</span><span class="p">,</span> <span class="n">MAX_SHARD_BLOCKS_PER_ATTESTATION</span><span class="p">]</span>
+    <span class="c1"># Intermediate shard states
+</span>    <span class="n">shard_states</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">ShardState</span><span class="p">,</span> <span class="n">MAX_SHARD_BLOCKS_PER_ATTESTATION</span><span class="p">]</span>
+    <span class="c1"># Proposer signature aggregate
+</span>    <span class="n">proposer_signature_aggregate</span><span class="p">:</span> <span class="n">BLSSignature</span>
+</code></pre></div></div>
+
+<h3 id="compactcommittee"><code class="language-plaintext highlighter-rouge">CompactCommittee</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">CompactCommittee</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">pubkeys</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">BLSPubkey</span><span class="p">,</span> <span class="n">MAX_VALIDATORS_PER_COMMITTEE</span><span class="p">]</span>
+    <span class="n">compact_validators</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">uint64</span><span class="p">,</span> <span class="n">MAX_VALIDATORS_PER_COMMITTEE</span><span class="p">]</span>
+</code></pre></div></div>
+
+<h2 id="helper-functions">Helper functions</h2>
+
+<h3 id="misc-1">Misc</h3>
+
+<h4 id="compute_previous_slot"><code class="language-plaintext highlighter-rouge">compute_previous_slot</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">compute_previous_slot</span><span class="p">(</span><span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Slot</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">slot</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">Slot</span><span class="p">(</span><span class="n">slot</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">Slot</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="pack_compact_validator"><code class="language-plaintext highlighter-rouge">pack_compact_validator</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">pack_compact_validator</span><span class="p">(</span><span class="n">index</span><span class="p">:</span> <span class="n">ValidatorIndex</span><span class="p">,</span> <span class="n">slashed</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span> <span class="n">balance_in_increments</span><span class="p">:</span> <span class="n">uint64</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">uint64</span><span class="p">:</span>
+    <span class="s">"""
+    Create a compact validator object representing index, slashed status, and compressed balance.
+    Takes as input balance-in-increments (// EFFECTIVE_BALANCE_INCREMENT) to preserve symmetry with
+    the unpacking function.
+    """</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">index</span> <span class="o">&lt;&lt;</span> <span class="mi">16</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="n">slashed</span> <span class="o">&lt;&lt;</span> <span class="mi">15</span><span class="p">)</span> <span class="o">+</span> <span class="n">balance_in_increments</span>
+</code></pre></div></div>
+
+<h4 id="unpack_compact_validator"><code class="language-plaintext highlighter-rouge">unpack_compact_validator</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">unpack_compact_validator</span><span class="p">(</span><span class="n">compact_validator</span><span class="p">:</span> <span class="n">uint64</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">ValidatorIndex</span><span class="p">,</span> <span class="nb">bool</span><span class="p">,</span> <span class="n">uint64</span><span class="p">]:</span>
+    <span class="s">"""
+    Return validator index, slashed, balance // EFFECTIVE_BALANCE_INCREMENT
+    """</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="n">ValidatorIndex</span><span class="p">(</span><span class="n">compact_validator</span> <span class="o">&gt;&gt;</span> <span class="mi">16</span><span class="p">),</span>
+        <span class="nb">bool</span><span class="p">((</span><span class="n">compact_validator</span> <span class="o">&gt;&gt;</span> <span class="mi">15</span><span class="p">)</span> <span class="o">%</span> <span class="mi">2</span><span class="p">),</span>
+        <span class="n">compact_validator</span> <span class="o">&amp;</span> <span class="p">(</span><span class="mi">2</span><span class="o">**</span><span class="mi">15</span> <span class="o">-</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="committee_to_compact_committee"><code class="language-plaintext highlighter-rouge">committee_to_compact_committee</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">committee_to_compact_committee</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">committee</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">ValidatorIndex</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">CompactCommittee</span><span class="p">:</span>
+    <span class="s">"""
+    Given a state and a list of validator indices, outputs the ``CompactCommittee`` representing them.
+    """</span>
+    <span class="n">validators</span> <span class="o">=</span> <span class="p">[</span><span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">committee</span><span class="p">]</span>
+    <span class="n">compact_validators</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">pack_compact_validator</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">v</span><span class="p">.</span><span class="n">slashed</span><span class="p">,</span> <span class="n">v</span><span class="p">.</span><span class="n">effective_balance</span> <span class="o">//</span> <span class="n">EFFECTIVE_BALANCE_INCREMENT</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">committee</span><span class="p">,</span> <span class="n">validators</span><span class="p">)</span>
+    <span class="p">]</span>
+    <span class="n">pubkeys</span> <span class="o">=</span> <span class="p">[</span><span class="n">v</span><span class="p">.</span><span class="n">pubkey</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">validators</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">CompactCommittee</span><span class="p">(</span><span class="n">pubkeys</span><span class="o">=</span><span class="n">pubkeys</span><span class="p">,</span> <span class="n">compact_validators</span><span class="o">=</span><span class="n">compact_validators</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="compute_shard_from_committee_index"><code class="language-plaintext highlighter-rouge">compute_shard_from_committee_index</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">compute_shard_from_committee_index</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="n">CommitteeIndex</span><span class="p">,</span> <span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Shard</span><span class="p">:</span>
+    <span class="n">active_shards</span> <span class="o">=</span> <span class="n">get_active_shard_count</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">Shard</span><span class="p">((</span><span class="n">index</span> <span class="o">+</span> <span class="n">get_start_shard</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">slot</span><span class="p">))</span> <span class="o">%</span> <span class="n">active_shards</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="compute_offset_slots"><code class="language-plaintext highlighter-rouge">compute_offset_slots</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">compute_offset_slots</span><span class="p">(</span><span class="n">start_slot</span><span class="p">:</span> <span class="n">Slot</span><span class="p">,</span> <span class="n">end_slot</span><span class="p">:</span> <span class="n">Slot</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Slot</span><span class="p">]:</span>
+    <span class="s">"""
+    Return the offset slots that are greater than ``start_slot`` and less than ``end_slot``.
+    """</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">Slot</span><span class="p">(</span><span class="n">start_slot</span> <span class="o">+</span> <span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">SHARD_BLOCK_OFFSETS</span> <span class="k">if</span> <span class="n">start_slot</span> <span class="o">+</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="n">end_slot</span><span class="p">]</span>
+</code></pre></div></div>
+
+<h4 id="compute_updated_gasprice"><code class="language-plaintext highlighter-rouge">compute_updated_gasprice</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">compute_updated_gasprice</span><span class="p">(</span><span class="n">prev_gasprice</span><span class="p">:</span> <span class="n">Gwei</span><span class="p">,</span> <span class="n">shard_block_length</span><span class="p">:</span> <span class="n">uint64</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Gwei</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">shard_block_length</span> <span class="o">&gt;</span> <span class="n">TARGET_SHARD_BLOCK_SIZE</span><span class="p">:</span>
+        <span class="n">delta</span> <span class="o">=</span> <span class="p">(</span><span class="n">prev_gasprice</span> <span class="o">*</span> <span class="p">(</span><span class="n">shard_block_length</span> <span class="o">-</span> <span class="n">TARGET_SHARD_BLOCK_SIZE</span><span class="p">)</span>
+                 <span class="o">//</span> <span class="n">TARGET_SHARD_BLOCK_SIZE</span> <span class="o">//</span> <span class="n">GASPRICE_ADJUSTMENT_COEFFICIENT</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">min</span><span class="p">(</span><span class="n">prev_gasprice</span> <span class="o">+</span> <span class="n">delta</span><span class="p">,</span> <span class="n">MAX_GASPRICE</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">delta</span> <span class="o">=</span> <span class="p">(</span><span class="n">prev_gasprice</span> <span class="o">*</span> <span class="p">(</span><span class="n">TARGET_SHARD_BLOCK_SIZE</span> <span class="o">-</span> <span class="n">shard_block_length</span><span class="p">)</span>
+                 <span class="o">//</span> <span class="n">TARGET_SHARD_BLOCK_SIZE</span> <span class="o">//</span> <span class="n">GASPRICE_ADJUSTMENT_COEFFICIENT</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="n">prev_gasprice</span><span class="p">,</span> <span class="n">MIN_GASPRICE</span> <span class="o">+</span> <span class="n">delta</span><span class="p">)</span> <span class="o">-</span> <span class="n">delta</span>
+</code></pre></div></div>
+
+<h4 id="compute_committee_source_epoch"><code class="language-plaintext highlighter-rouge">compute_committee_source_epoch</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">compute_committee_source_epoch</span><span class="p">(</span><span class="n">epoch</span><span class="p">:</span> <span class="n">Epoch</span><span class="p">,</span> <span class="n">period</span><span class="p">:</span> <span class="n">uint64</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Epoch</span><span class="p">:</span>
+    <span class="s">"""
+    Return the source epoch for computing the committee.
+    """</span>
+    <span class="n">source_epoch</span> <span class="o">=</span> <span class="n">Epoch</span><span class="p">(</span><span class="n">epoch</span> <span class="o">-</span> <span class="n">epoch</span> <span class="o">%</span> <span class="n">period</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">source_epoch</span> <span class="o">&gt;=</span> <span class="n">period</span><span class="p">:</span>
+        <span class="n">source_epoch</span> <span class="o">-=</span> <span class="n">period</span>  <span class="c1"># `period` epochs lookahead
+</span>    <span class="k">return</span> <span class="n">source_epoch</span>
+</code></pre></div></div>
+
+<h3 id="beacon-state-accessors">Beacon state accessors</h3>
+
+<h4 id="updated-get_committee_count_per_slot">Updated <code class="language-plaintext highlighter-rouge">get_committee_count_per_slot</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_committee_count_per_slot</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">epoch</span><span class="p">:</span> <span class="n">Epoch</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">uint64</span><span class="p">:</span>
+    <span class="s">"""
+    Return the number of committees in each slot for the given ``epoch``.
+    """</span>
+    <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="n">uint64</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="nb">min</span><span class="p">(</span>
+        <span class="n">get_active_shard_count</span><span class="p">(</span><span class="n">state</span><span class="p">),</span>
+        <span class="n">uint64</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">get_active_validator_indices</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">epoch</span><span class="p">)))</span> <span class="o">//</span> <span class="n">SLOTS_PER_EPOCH</span> <span class="o">//</span> <span class="n">TARGET_COMMITTEE_SIZE</span><span class="p">,</span>
+    <span class="p">))</span>
+</code></pre></div></div>
+
+<h4 id="get_active_shard_count"><code class="language-plaintext highlighter-rouge">get_active_shard_count</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_active_shard_count</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">uint64</span><span class="p">:</span>
+    <span class="s">"""
+    Return the number of active shards.
+    Note that this puts an upper bound on the number of committees per slot.
+    """</span>
+    <span class="k">return</span> <span class="n">INITIAL_ACTIVE_SHARDS</span>
+</code></pre></div></div>
+
+<h4 id="get_online_validator_indices"><code class="language-plaintext highlighter-rouge">get_online_validator_indices</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_online_validator_indices</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Set</span><span class="p">[</span><span class="n">ValidatorIndex</span><span class="p">]:</span>
+    <span class="n">active_validators</span> <span class="o">=</span> <span class="n">get_active_validator_indices</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+    <span class="k">return</span> <span class="nb">set</span><span class="p">(</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">active_validators</span> <span class="k">if</span> <span class="n">state</span><span class="p">.</span><span class="n">online_countdown</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span>  <span class="c1"># non-duplicate
+</span></code></pre></div></div>
+
+<h4 id="get_shard_committee"><code class="language-plaintext highlighter-rouge">get_shard_committee</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_shard_committee</span><span class="p">(</span><span class="n">beacon_state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">epoch</span><span class="p">:</span> <span class="n">Epoch</span><span class="p">,</span> <span class="n">shard</span><span class="p">:</span> <span class="n">Shard</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">ValidatorIndex</span><span class="p">]:</span>
+    <span class="s">"""
+    Return the shard committee of the given ``epoch`` of the given ``shard``.
+    """</span>
+    <span class="n">source_epoch</span> <span class="o">=</span> <span class="n">compute_committee_source_epoch</span><span class="p">(</span><span class="n">epoch</span><span class="p">,</span> <span class="n">SHARD_COMMITTEE_PERIOD</span><span class="p">)</span>
+    <span class="n">active_validator_indices</span> <span class="o">=</span> <span class="n">get_active_validator_indices</span><span class="p">(</span><span class="n">beacon_state</span><span class="p">,</span> <span class="n">source_epoch</span><span class="p">)</span>
+    <span class="n">seed</span> <span class="o">=</span> <span class="n">get_seed</span><span class="p">(</span><span class="n">beacon_state</span><span class="p">,</span> <span class="n">source_epoch</span><span class="p">,</span> <span class="n">DOMAIN_SHARD_COMMITTEE</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">compute_committee</span><span class="p">(</span>
+        <span class="n">indices</span><span class="o">=</span><span class="n">active_validator_indices</span><span class="p">,</span>
+        <span class="n">seed</span><span class="o">=</span><span class="n">seed</span><span class="p">,</span>
+        <span class="n">index</span><span class="o">=</span><span class="n">shard</span><span class="p">,</span>
+        <span class="n">count</span><span class="o">=</span><span class="n">get_active_shard_count</span><span class="p">(</span><span class="n">beacon_state</span><span class="p">),</span>
+    <span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="get_light_client_committee"><code class="language-plaintext highlighter-rouge">get_light_client_committee</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_light_client_committee</span><span class="p">(</span><span class="n">beacon_state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">epoch</span><span class="p">:</span> <span class="n">Epoch</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">ValidatorIndex</span><span class="p">]:</span>
+    <span class="s">"""
+    Return the light client committee of no more than ``LIGHT_CLIENT_COMMITTEE_SIZE`` validators.
+    """</span>
+    <span class="n">source_epoch</span> <span class="o">=</span> <span class="n">compute_committee_source_epoch</span><span class="p">(</span><span class="n">epoch</span><span class="p">,</span> <span class="n">LIGHT_CLIENT_COMMITTEE_PERIOD</span><span class="p">)</span>
+    <span class="n">active_validator_indices</span> <span class="o">=</span> <span class="n">get_active_validator_indices</span><span class="p">(</span><span class="n">beacon_state</span><span class="p">,</span> <span class="n">source_epoch</span><span class="p">)</span>
+    <span class="n">seed</span> <span class="o">=</span> <span class="n">get_seed</span><span class="p">(</span><span class="n">beacon_state</span><span class="p">,</span> <span class="n">source_epoch</span><span class="p">,</span> <span class="n">DOMAIN_LIGHT_CLIENT</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">compute_committee</span><span class="p">(</span>
+        <span class="n">indices</span><span class="o">=</span><span class="n">active_validator_indices</span><span class="p">,</span>
+        <span class="n">seed</span><span class="o">=</span><span class="n">seed</span><span class="p">,</span>
+        <span class="n">index</span><span class="o">=</span><span class="n">uint64</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+        <span class="n">count</span><span class="o">=</span><span class="n">get_active_shard_count</span><span class="p">(</span><span class="n">beacon_state</span><span class="p">),</span>
+    <span class="p">)[:</span><span class="n">LIGHT_CLIENT_COMMITTEE_SIZE</span><span class="p">]</span>
+</code></pre></div></div>
+
+<h4 id="get_shard_proposer_index"><code class="language-plaintext highlighter-rouge">get_shard_proposer_index</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_shard_proposer_index</span><span class="p">(</span><span class="n">beacon_state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span><span class="p">,</span> <span class="n">shard</span><span class="p">:</span> <span class="n">Shard</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ValidatorIndex</span><span class="p">:</span>
+    <span class="s">"""
+    Return the proposer's index of shard block at ``slot``.
+    """</span>
+    <span class="n">epoch</span> <span class="o">=</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">slot</span><span class="p">)</span>
+    <span class="n">committee</span> <span class="o">=</span> <span class="n">get_shard_committee</span><span class="p">(</span><span class="n">beacon_state</span><span class="p">,</span> <span class="n">epoch</span><span class="p">,</span> <span class="n">shard</span><span class="p">)</span>
+    <span class="n">seed</span> <span class="o">=</span> <span class="nb">hash</span><span class="p">(</span><span class="n">get_seed</span><span class="p">(</span><span class="n">beacon_state</span><span class="p">,</span> <span class="n">epoch</span><span class="p">,</span> <span class="n">DOMAIN_SHARD_COMMITTEE</span><span class="p">)</span> <span class="o">+</span> <span class="n">uint_to_bytes</span><span class="p">(</span><span class="n">slot</span><span class="p">))</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="n">bytes_to_uint64</span><span class="p">(</span><span class="n">seed</span><span class="p">[:</span><span class="mi">8</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">committee</span><span class="p">[</span><span class="n">r</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">committee</span><span class="p">)]</span>
+</code></pre></div></div>
+
+<h4 id="get_committee_count_delta"><code class="language-plaintext highlighter-rouge">get_committee_count_delta</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_committee_count_delta</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">start_slot</span><span class="p">:</span> <span class="n">Slot</span><span class="p">,</span> <span class="n">stop_slot</span><span class="p">:</span> <span class="n">Slot</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">uint64</span><span class="p">:</span>
+    <span class="s">"""
+    Return the sum of committee counts in range ``[start_slot, stop_slot)``.
+    """</span>
+    <span class="k">return</span> <span class="n">uint64</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span>
+        <span class="n">get_committee_count_per_slot</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">Slot</span><span class="p">(</span><span class="n">slot</span><span class="p">)))</span>
+        <span class="k">for</span> <span class="n">slot</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">start_slot</span><span class="p">,</span> <span class="n">stop_slot</span><span class="p">)</span>
+    <span class="p">))</span>
+</code></pre></div></div>
+
+<h4 id="get_start_shard"><code class="language-plaintext highlighter-rouge">get_start_shard</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_start_shard</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">slot</span><span class="p">:</span> <span class="n">Slot</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Shard</span><span class="p">:</span>
+    <span class="s">"""
+    Return the start shard at ``slot``.
+    """</span>
+    <span class="n">current_epoch_start_slot</span> <span class="o">=</span> <span class="n">compute_start_slot_at_epoch</span><span class="p">(</span><span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+    <span class="n">active_shard_count</span> <span class="o">=</span> <span class="n">get_active_shard_count</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">current_epoch_start_slot</span> <span class="o">==</span> <span class="n">slot</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">state</span><span class="p">.</span><span class="n">current_epoch_start_shard</span>
+    <span class="k">elif</span> <span class="n">slot</span> <span class="o">&gt;</span> <span class="n">current_epoch_start_slot</span><span class="p">:</span>
+        <span class="c1"># Current epoch or the next epoch lookahead
+</span>        <span class="n">shard_delta</span> <span class="o">=</span> <span class="n">get_committee_count_delta</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">start_slot</span><span class="o">=</span><span class="n">current_epoch_start_slot</span><span class="p">,</span> <span class="n">stop_slot</span><span class="o">=</span><span class="n">slot</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">Shard</span><span class="p">((</span><span class="n">state</span><span class="p">.</span><span class="n">current_epoch_start_shard</span> <span class="o">+</span> <span class="n">shard_delta</span><span class="p">)</span> <span class="o">%</span> <span class="n">active_shard_count</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># Previous epoch
+</span>        <span class="n">shard_delta</span> <span class="o">=</span> <span class="n">get_committee_count_delta</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">start_slot</span><span class="o">=</span><span class="n">slot</span><span class="p">,</span> <span class="n">stop_slot</span><span class="o">=</span><span class="n">current_epoch_start_slot</span><span class="p">)</span>
+        <span class="n">max_committees_per_slot</span> <span class="o">=</span> <span class="n">active_shard_count</span>
+        <span class="n">max_committees_in_span</span> <span class="o">=</span> <span class="n">max_committees_per_slot</span> <span class="o">*</span> <span class="p">(</span><span class="n">current_epoch_start_slot</span> <span class="o">-</span> <span class="n">slot</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">Shard</span><span class="p">(</span>
+            <span class="c1"># Ensure positive
+</span>            <span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">current_epoch_start_shard</span> <span class="o">+</span> <span class="n">max_committees_in_span</span> <span class="o">-</span> <span class="n">shard_delta</span><span class="p">)</span>
+            <span class="o">%</span> <span class="n">active_shard_count</span>
+        <span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="get_latest_slot_for_shard"><code class="language-plaintext highlighter-rouge">get_latest_slot_for_shard</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_latest_slot_for_shard</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">shard</span><span class="p">:</span> <span class="n">Shard</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Slot</span><span class="p">:</span>
+    <span class="s">"""
+    Return the latest slot number of the given ``shard``.
+    """</span>
+    <span class="k">return</span> <span class="n">state</span><span class="p">.</span><span class="n">shard_states</span><span class="p">[</span><span class="n">shard</span><span class="p">].</span><span class="n">slot</span>
+</code></pre></div></div>
+
+<h4 id="get_offset_slots"><code class="language-plaintext highlighter-rouge">get_offset_slots</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_offset_slots</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">shard</span><span class="p">:</span> <span class="n">Shard</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Slot</span><span class="p">]:</span>
+    <span class="s">"""
+    Return the offset slots of the given ``shard``.
+    The offset slot are after the latest slot and before current slot. 
+    """</span>
+    <span class="k">return</span> <span class="n">compute_offset_slots</span><span class="p">(</span><span class="n">get_latest_slot_for_shard</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">shard</span><span class="p">),</span> <span class="n">state</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="predicates">Predicates</h3>
+
+<h4 id="is_on_time_attestation"><code class="language-plaintext highlighter-rouge">is_on_time_attestation</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">is_on_time_attestation</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+                           <span class="n">attestation_data</span><span class="p">:</span> <span class="n">AttestationData</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="s">"""
+    Check if the given ``attestation_data`` is on-time.
+    """</span>
+    <span class="k">return</span> <span class="n">attestation_data</span><span class="p">.</span><span class="n">slot</span> <span class="o">==</span> <span class="n">compute_previous_slot</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="is_winning_attestation"><code class="language-plaintext highlighter-rouge">is_winning_attestation</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">is_winning_attestation</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+                           <span class="n">attestation</span><span class="p">:</span> <span class="n">PendingAttestation</span><span class="p">,</span>
+                           <span class="n">committee_index</span><span class="p">:</span> <span class="n">CommitteeIndex</span><span class="p">,</span>
+                           <span class="n">winning_root</span><span class="p">:</span> <span class="n">Root</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="s">"""
+    Check if on-time ``attestation`` helped contribute to the successful crosslink of
+    ``winning_root`` formed by ``committee_index`` committee.
+    """</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="n">is_on_time_attestation</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">)</span>
+        <span class="ow">and</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">index</span> <span class="o">==</span> <span class="n">committee_index</span>
+        <span class="ow">and</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">shard_transition_root</span> <span class="o">==</span> <span class="n">winning_root</span>
+    <span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="optional_aggregate_verify"><code class="language-plaintext highlighter-rouge">optional_aggregate_verify</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">optional_aggregate_verify</span><span class="p">(</span><span class="n">pubkeys</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">BLSPubkey</span><span class="p">],</span>
+                              <span class="n">messages</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Bytes32</span><span class="p">],</span>
+                              <span class="n">signature</span><span class="p">:</span> <span class="n">BLSSignature</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="s">"""
+    If ``pubkeys`` is an empty list, the given ``signature`` should be a stub ``NO_SIGNATURE``.
+    Otherwise, verify it with standard BLS AggregateVerify API.
+    """</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">pubkeys</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">signature</span> <span class="o">==</span> <span class="n">NO_SIGNATURE</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">bls</span><span class="p">.</span><span class="n">AggregateVerify</span><span class="p">(</span><span class="n">pubkeys</span><span class="p">,</span> <span class="n">messages</span><span class="p">,</span> <span class="n">signature</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="optional_fast_aggregate_verify"><code class="language-plaintext highlighter-rouge">optional_fast_aggregate_verify</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">optional_fast_aggregate_verify</span><span class="p">(</span><span class="n">pubkeys</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">BLSPubkey</span><span class="p">],</span> <span class="n">message</span><span class="p">:</span> <span class="n">Bytes32</span><span class="p">,</span> <span class="n">signature</span><span class="p">:</span> <span class="n">BLSSignature</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="s">"""
+    If ``pubkeys`` is an empty list, the given ``signature`` should be a stub ``NO_SIGNATURE``.
+    Otherwise, verify it with standard BLS FastAggregateVerify API.
+    """</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">pubkeys</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">signature</span> <span class="o">==</span> <span class="n">NO_SIGNATURE</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">bls</span><span class="p">.</span><span class="n">FastAggregateVerify</span><span class="p">(</span><span class="n">pubkeys</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">signature</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="block-processing">Block processing</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_block</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">block</span><span class="p">:</span> <span class="n">BeaconBlock</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">process_block_header</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">block</span><span class="p">)</span>
+    <span class="n">process_randao</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">block</span><span class="p">.</span><span class="n">body</span><span class="p">)</span>
+    <span class="n">process_eth1_data</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">block</span><span class="p">.</span><span class="n">body</span><span class="p">)</span>
+    <span class="n">process_light_client_aggregate</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">block</span><span class="p">.</span><span class="n">body</span><span class="p">)</span>
+    <span class="n">process_operations</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">block</span><span class="p">.</span><span class="n">body</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="operations">Operations</h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_operations</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">body</span><span class="p">:</span> <span class="n">BeaconBlockBody</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="c1"># Verify that outstanding deposits are processed up to the maximum number of deposits
+</span>    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">body</span><span class="p">.</span><span class="n">deposits</span><span class="p">)</span> <span class="o">==</span> <span class="nb">min</span><span class="p">(</span><span class="n">MAX_DEPOSITS</span><span class="p">,</span> <span class="n">state</span><span class="p">.</span><span class="n">eth1_data</span><span class="p">.</span><span class="n">deposit_count</span> <span class="o">-</span> <span class="n">state</span><span class="p">.</span><span class="n">eth1_deposit_index</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">for_ops</span><span class="p">(</span><span class="n">operations</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">BeaconState</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="bp">None</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">operation</span> <span class="ow">in</span> <span class="n">operations</span><span class="p">:</span>
+            <span class="n">fn</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">operation</span><span class="p">)</span>
+
+    <span class="n">for_ops</span><span class="p">(</span><span class="n">body</span><span class="p">.</span><span class="n">proposer_slashings</span><span class="p">,</span> <span class="n">process_proposer_slashing</span><span class="p">)</span>
+    <span class="n">for_ops</span><span class="p">(</span><span class="n">body</span><span class="p">.</span><span class="n">attester_slashings</span><span class="p">,</span> <span class="n">process_attester_slashing</span><span class="p">)</span>
+    <span class="c1"># New attestation processing
+</span>    <span class="n">for_ops</span><span class="p">(</span><span class="n">body</span><span class="p">.</span><span class="n">attestations</span><span class="p">,</span> <span class="n">process_attestation</span><span class="p">)</span>
+    <span class="n">for_ops</span><span class="p">(</span><span class="n">body</span><span class="p">.</span><span class="n">deposits</span><span class="p">,</span> <span class="n">process_deposit</span><span class="p">)</span>
+    <span class="n">for_ops</span><span class="p">(</span><span class="n">body</span><span class="p">.</span><span class="n">voluntary_exits</span><span class="p">,</span> <span class="n">process_voluntary_exit</span><span class="p">)</span>
+
+    <span class="c1"># See custody game spec.
+</span>    <span class="n">process_custody_game_operations</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">body</span><span class="p">)</span>
+
+    <span class="n">process_shard_transitions</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">body</span><span class="p">.</span><span class="n">shard_transitions</span><span class="p">,</span> <span class="n">body</span><span class="p">.</span><span class="n">attestations</span><span class="p">)</span>
+
+    <span class="c1"># TODO process_operations(body.shard_receipt_proofs, process_shard_receipt_proofs)
+</span></code></pre></div></div>
+
+<h5 id="new-attestation-processing">New Attestation processing</h5>
+
+<h6 id="validate_attestation"><code class="language-plaintext highlighter-rouge">validate_attestation</code></h6>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">validate_attestation</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">attestation</span><span class="p">:</span> <span class="n">Attestation</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span>
+    <span class="k">assert</span> <span class="n">data</span><span class="p">.</span><span class="n">index</span> <span class="o">&lt;</span> <span class="n">get_committee_count_per_slot</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">data</span><span class="p">.</span><span class="n">target</span><span class="p">.</span><span class="n">epoch</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">data</span><span class="p">.</span><span class="n">target</span><span class="p">.</span><span class="n">epoch</span> <span class="ow">in</span> <span class="p">(</span><span class="n">get_previous_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">),</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+    <span class="k">assert</span> <span class="n">data</span><span class="p">.</span><span class="n">target</span><span class="p">.</span><span class="n">epoch</span> <span class="o">==</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">data</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">data</span><span class="p">.</span><span class="n">slot</span> <span class="o">+</span> <span class="n">MIN_ATTESTATION_INCLUSION_DELAY</span> <span class="o">&lt;=</span> <span class="n">state</span><span class="p">.</span><span class="n">slot</span> <span class="o">&lt;=</span> <span class="n">data</span><span class="p">.</span><span class="n">slot</span> <span class="o">+</span> <span class="n">SLOTS_PER_EPOCH</span>
+
+    <span class="n">committee</span> <span class="o">=</span> <span class="n">get_beacon_committee</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">data</span><span class="p">.</span><span class="n">slot</span><span class="p">,</span> <span class="n">data</span><span class="p">.</span><span class="n">index</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">attestation</span><span class="p">.</span><span class="n">aggregation_bits</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">committee</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">data</span><span class="p">.</span><span class="n">target</span><span class="p">.</span><span class="n">epoch</span> <span class="o">==</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="n">data</span><span class="p">.</span><span class="n">source</span> <span class="o">==</span> <span class="n">state</span><span class="p">.</span><span class="n">current_justified_checkpoint</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">data</span><span class="p">.</span><span class="n">source</span> <span class="o">==</span> <span class="n">state</span><span class="p">.</span><span class="n">previous_justified_checkpoint</span>
+
+    <span class="c1"># Type 1: on-time attestations
+</span>    <span class="k">if</span> <span class="n">is_on_time_attestation</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="c1"># Correct parent block root
+</span>        <span class="k">assert</span> <span class="n">data</span><span class="p">.</span><span class="n">beacon_block_root</span> <span class="o">==</span> <span class="n">get_block_root_at_slot</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">compute_previous_slot</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">slot</span><span class="p">))</span>
+        <span class="c1"># Correct shard number
+</span>        <span class="n">shard</span> <span class="o">=</span> <span class="n">compute_shard_from_committee_index</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">data</span><span class="p">.</span><span class="n">index</span><span class="p">,</span> <span class="n">data</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">data</span><span class="p">.</span><span class="n">shard</span> <span class="o">==</span> <span class="n">shard</span>
+        <span class="c1"># NOTE: We currently set `PHASE_1_FORK_SLOT` to `GENESIS_SLOT` for test vectors.
+</span>        <span class="k">if</span> <span class="n">data</span><span class="p">.</span><span class="n">slot</span> <span class="o">&gt;</span> <span class="n">GENESIS_SLOT</span><span class="p">:</span>
+            <span class="c1"># On-time attestations should have a non-empty shard transition root
+</span>            <span class="k">assert</span> <span class="n">data</span><span class="p">.</span><span class="n">shard_transition_root</span> <span class="o">!=</span> <span class="n">hash_tree_root</span><span class="p">(</span><span class="n">ShardTransition</span><span class="p">())</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="n">data</span><span class="p">.</span><span class="n">shard_transition_root</span> <span class="o">==</span> <span class="n">hash_tree_root</span><span class="p">(</span><span class="n">ShardTransition</span><span class="p">())</span>
+    <span class="c1"># Type 2: no shard transition
+</span>    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># Ensure delayed attestation
+</span>        <span class="k">assert</span> <span class="n">data</span><span class="p">.</span><span class="n">slot</span> <span class="o">&lt;</span> <span class="n">compute_previous_slot</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span>
+        <span class="c1"># Late attestations cannot have a shard transition root
+</span>        <span class="k">assert</span> <span class="n">data</span><span class="p">.</span><span class="n">shard_transition_root</span> <span class="o">==</span> <span class="n">Root</span><span class="p">()</span>
+
+    <span class="c1"># Signature check
+</span>    <span class="k">assert</span> <span class="n">is_valid_indexed_attestation</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">get_indexed_attestation</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">attestation</span><span class="p">))</span>
+</code></pre></div></div>
+
+<h6 id="updated-process_attestation">Updated <code class="language-plaintext highlighter-rouge">process_attestation</code></h6>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_attestation</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">attestation</span><span class="p">:</span> <span class="n">Attestation</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">validate_attestation</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">attestation</span><span class="p">)</span>
+    <span class="c1"># Store pending attestation for epoch processing
+</span>    <span class="n">pending_attestation</span> <span class="o">=</span> <span class="n">PendingAttestation</span><span class="p">(</span>
+        <span class="n">aggregation_bits</span><span class="o">=</span><span class="n">attestation</span><span class="p">.</span><span class="n">aggregation_bits</span><span class="p">,</span>
+        <span class="n">data</span><span class="o">=</span><span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">,</span>
+        <span class="n">inclusion_delay</span><span class="o">=</span><span class="n">state</span><span class="p">.</span><span class="n">slot</span> <span class="o">-</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">slot</span><span class="p">,</span>
+        <span class="n">proposer_index</span><span class="o">=</span><span class="n">get_beacon_proposer_index</span><span class="p">(</span><span class="n">state</span><span class="p">),</span>
+        <span class="n">crosslink_success</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span>  <span class="c1"># To be filled in during process_shard_transitions
+</span>    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">target</span><span class="p">.</span><span class="n">epoch</span> <span class="o">==</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">):</span>
+        <span class="n">state</span><span class="p">.</span><span class="n">current_epoch_attestations</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">pending_attestation</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">state</span><span class="p">.</span><span class="n">previous_epoch_attestations</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">pending_attestation</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h5 id="shard-transition-processing">Shard transition processing</h5>
+
+<h6 id="apply_shard_transition"><code class="language-plaintext highlighter-rouge">apply_shard_transition</code></h6>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">apply_shard_transition</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">shard</span><span class="p">:</span> <span class="n">Shard</span><span class="p">,</span> <span class="n">transition</span><span class="p">:</span> <span class="n">ShardTransition</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="c1"># TODO: only need to check it once when phase 1 starts
+</span>    <span class="k">assert</span> <span class="n">state</span><span class="p">.</span><span class="n">slot</span> <span class="o">&gt;</span> <span class="n">PHASE_1_FORK_SLOT</span>
+
+    <span class="c1"># Correct data root count
+</span>    <span class="n">offset_slots</span> <span class="o">=</span> <span class="n">get_offset_slots</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">shard</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="p">(</span>
+        <span class="nb">len</span><span class="p">(</span><span class="n">transition</span><span class="p">.</span><span class="n">shard_data_roots</span><span class="p">)</span>
+        <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">transition</span><span class="p">.</span><span class="n">shard_states</span><span class="p">)</span>
+        <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">transition</span><span class="p">.</span><span class="n">shard_block_lengths</span><span class="p">)</span>
+        <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">offset_slots</span><span class="p">)</span>
+    <span class="p">)</span>
+    <span class="k">assert</span> <span class="n">transition</span><span class="p">.</span><span class="n">start_slot</span> <span class="o">==</span> <span class="n">offset_slots</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="n">headers</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">proposers</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">prev_gasprice</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">shard_states</span><span class="p">[</span><span class="n">shard</span><span class="p">].</span><span class="n">gasprice</span>
+    <span class="n">shard_parent_root</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">shard_states</span><span class="p">[</span><span class="n">shard</span><span class="p">].</span><span class="n">latest_block_root</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">offset_slot</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">offset_slots</span><span class="p">):</span>
+        <span class="n">shard_block_length</span> <span class="o">=</span> <span class="n">transition</span><span class="p">.</span><span class="n">shard_block_lengths</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="n">shard_state</span> <span class="o">=</span> <span class="n">transition</span><span class="p">.</span><span class="n">shard_states</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="c1"># Verify correct calculation of gas prices and slots
+</span>        <span class="k">assert</span> <span class="n">shard_state</span><span class="p">.</span><span class="n">gasprice</span> <span class="o">==</span> <span class="n">compute_updated_gasprice</span><span class="p">(</span><span class="n">prev_gasprice</span><span class="p">,</span> <span class="n">shard_block_length</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">shard_state</span><span class="p">.</span><span class="n">slot</span> <span class="o">==</span> <span class="n">offset_slot</span>
+        <span class="c1"># Collect the non-empty proposals result
+</span>        <span class="n">is_empty_proposal</span> <span class="o">=</span> <span class="n">shard_block_length</span> <span class="o">==</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_empty_proposal</span><span class="p">:</span>
+            <span class="n">proposal_index</span> <span class="o">=</span> <span class="n">get_shard_proposer_index</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">offset_slot</span><span class="p">,</span> <span class="n">shard</span><span class="p">)</span>
+            <span class="c1"># Reconstruct shard headers
+</span>            <span class="n">header</span> <span class="o">=</span> <span class="n">ShardBlockHeader</span><span class="p">(</span>
+                <span class="n">shard_parent_root</span><span class="o">=</span><span class="n">shard_parent_root</span><span class="p">,</span>
+                <span class="n">beacon_parent_root</span><span class="o">=</span><span class="n">get_block_root_at_slot</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">offset_slot</span><span class="p">),</span>
+                <span class="n">slot</span><span class="o">=</span><span class="n">offset_slot</span><span class="p">,</span>
+                <span class="n">shard</span><span class="o">=</span><span class="n">shard</span><span class="p">,</span>
+                <span class="n">proposer_index</span><span class="o">=</span><span class="n">proposal_index</span><span class="p">,</span>
+                <span class="n">body_root</span><span class="o">=</span><span class="n">transition</span><span class="p">.</span><span class="n">shard_data_roots</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="p">)</span>
+            <span class="n">shard_parent_root</span> <span class="o">=</span> <span class="n">hash_tree_root</span><span class="p">(</span><span class="n">header</span><span class="p">)</span>
+            <span class="n">headers</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">header</span><span class="p">)</span>
+            <span class="n">proposers</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">proposal_index</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Must have a stub for `shard_data_root` if empty slot
+</span>            <span class="k">assert</span> <span class="n">transition</span><span class="p">.</span><span class="n">shard_data_roots</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="n">Root</span><span class="p">()</span>
+
+        <span class="n">prev_gasprice</span> <span class="o">=</span> <span class="n">shard_state</span><span class="p">.</span><span class="n">gasprice</span>
+
+    <span class="n">pubkeys</span> <span class="o">=</span> <span class="p">[</span><span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">[</span><span class="n">proposer</span><span class="p">].</span><span class="n">pubkey</span> <span class="k">for</span> <span class="n">proposer</span> <span class="ow">in</span> <span class="n">proposers</span><span class="p">]</span>
+    <span class="n">signing_roots</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">compute_signing_root</span><span class="p">(</span><span class="n">header</span><span class="p">,</span> <span class="n">get_domain</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">DOMAIN_SHARD_PROPOSAL</span><span class="p">,</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">header</span><span class="p">.</span><span class="n">slot</span><span class="p">)))</span>
+        <span class="k">for</span> <span class="n">header</span> <span class="ow">in</span> <span class="n">headers</span>
+    <span class="p">]</span>
+    <span class="c1"># Verify combined proposer signature
+</span>    <span class="k">assert</span> <span class="n">optional_aggregate_verify</span><span class="p">(</span><span class="n">pubkeys</span><span class="p">,</span> <span class="n">signing_roots</span><span class="p">,</span> <span class="n">transition</span><span class="p">.</span><span class="n">proposer_signature_aggregate</span><span class="p">)</span>
+
+    <span class="c1"># Copy and save updated shard state
+</span>    <span class="n">shard_state</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="n">transition</span><span class="p">.</span><span class="n">shard_states</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">transition</span><span class="p">.</span><span class="n">shard_states</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">])</span>
+    <span class="n">shard_state</span><span class="p">.</span><span class="n">slot</span> <span class="o">=</span> <span class="n">compute_previous_slot</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span>
+    <span class="n">state</span><span class="p">.</span><span class="n">shard_states</span><span class="p">[</span><span class="n">shard</span><span class="p">]</span> <span class="o">=</span> <span class="n">shard_state</span>
+</code></pre></div></div>
+
+<h6 id="process_crosslink_for_shard"><code class="language-plaintext highlighter-rouge">process_crosslink_for_shard</code></h6>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_crosslink_for_shard</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+                                <span class="n">committee_index</span><span class="p">:</span> <span class="n">CommitteeIndex</span><span class="p">,</span>
+                                <span class="n">shard_transition</span><span class="p">:</span> <span class="n">ShardTransition</span><span class="p">,</span>
+                                <span class="n">attestations</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Attestation</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Root</span><span class="p">:</span>
+    <span class="n">on_time_attestation_slot</span> <span class="o">=</span> <span class="n">compute_previous_slot</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span>
+    <span class="n">committee</span> <span class="o">=</span> <span class="n">get_beacon_committee</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">on_time_attestation_slot</span><span class="p">,</span> <span class="n">committee_index</span><span class="p">)</span>
+    <span class="n">online_indices</span> <span class="o">=</span> <span class="n">get_online_validator_indices</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="n">shard</span> <span class="o">=</span> <span class="n">compute_shard_from_committee_index</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">committee_index</span><span class="p">,</span> <span class="n">on_time_attestation_slot</span><span class="p">)</span>
+
+    <span class="c1"># Loop over all shard transition roots
+</span>    <span class="n">shard_transition_roots</span> <span class="o">=</span> <span class="nb">set</span><span class="p">([</span><span class="n">a</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">shard_transition_root</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">attestations</span><span class="p">])</span>
+    <span class="k">for</span> <span class="n">shard_transition_root</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">shard_transition_roots</span><span class="p">):</span>
+        <span class="n">transition_attestations</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">attestations</span> <span class="k">if</span> <span class="n">a</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">shard_transition_root</span> <span class="o">==</span> <span class="n">shard_transition_root</span><span class="p">]</span>
+        <span class="n">transition_participants</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="n">ValidatorIndex</span><span class="p">]</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">attestation</span> <span class="ow">in</span> <span class="n">transition_attestations</span><span class="p">:</span>
+            <span class="n">participants</span> <span class="o">=</span> <span class="n">get_attesting_indices</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">,</span> <span class="n">attestation</span><span class="p">.</span><span class="n">aggregation_bits</span><span class="p">)</span>
+            <span class="n">transition_participants</span> <span class="o">=</span> <span class="n">transition_participants</span><span class="p">.</span><span class="n">union</span><span class="p">(</span><span class="n">participants</span><span class="p">)</span>
+
+        <span class="n">enough_online_stake</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">get_total_balance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">online_indices</span><span class="p">.</span><span class="n">intersection</span><span class="p">(</span><span class="n">transition_participants</span><span class="p">))</span> <span class="o">*</span> <span class="mi">3</span> <span class="o">&gt;=</span>
+            <span class="n">get_total_balance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">online_indices</span><span class="p">.</span><span class="n">intersection</span><span class="p">(</span><span class="n">committee</span><span class="p">))</span> <span class="o">*</span> <span class="mi">2</span>
+        <span class="p">)</span>
+        <span class="c1"># If not enough stake, try next transition root
+</span>        <span class="k">if</span> <span class="ow">not</span> <span class="n">enough_online_stake</span><span class="p">:</span>
+            <span class="k">continue</span>
+
+        <span class="c1"># Attestation &lt;-&gt; shard transition consistency
+</span>        <span class="k">assert</span> <span class="n">shard_transition_root</span> <span class="o">==</span> <span class="n">hash_tree_root</span><span class="p">(</span><span class="n">shard_transition</span><span class="p">)</span>
+
+        <span class="c1"># Check `shard_head_root` of the winning root
+</span>        <span class="n">last_offset_index</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">shard_transition</span><span class="p">.</span><span class="n">shard_states</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="n">shard_head_root</span> <span class="o">=</span> <span class="n">shard_transition</span><span class="p">.</span><span class="n">shard_states</span><span class="p">[</span><span class="n">last_offset_index</span><span class="p">].</span><span class="n">latest_block_root</span>
+        <span class="k">for</span> <span class="n">attestation</span> <span class="ow">in</span> <span class="n">transition_attestations</span><span class="p">:</span>
+            <span class="k">assert</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">shard_head_root</span> <span class="o">==</span> <span class="n">shard_head_root</span>
+
+        <span class="c1"># Apply transition
+</span>        <span class="n">apply_shard_transition</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">shard</span><span class="p">,</span> <span class="n">shard_transition</span><span class="p">)</span>
+        <span class="c1"># Apply proposer reward and cost
+</span>        <span class="n">beacon_proposer_index</span> <span class="o">=</span> <span class="n">get_beacon_proposer_index</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+        <span class="n">estimated_attester_reward</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">([</span><span class="n">get_base_reward</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">attester</span><span class="p">)</span> <span class="k">for</span> <span class="n">attester</span> <span class="ow">in</span> <span class="n">transition_participants</span><span class="p">])</span>
+        <span class="n">proposer_reward</span> <span class="o">=</span> <span class="n">Gwei</span><span class="p">(</span><span class="n">estimated_attester_reward</span> <span class="o">//</span> <span class="n">PROPOSER_REWARD_QUOTIENT</span><span class="p">)</span>
+        <span class="n">increase_balance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">beacon_proposer_index</span><span class="p">,</span> <span class="n">proposer_reward</span><span class="p">)</span>
+        <span class="n">states_slots_lengths</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span>
+            <span class="n">shard_transition</span><span class="p">.</span><span class="n">shard_states</span><span class="p">,</span>
+            <span class="n">get_offset_slots</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">shard</span><span class="p">),</span>
+            <span class="n">shard_transition</span><span class="p">.</span><span class="n">shard_block_lengths</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">shard_state</span><span class="p">,</span> <span class="n">slot</span><span class="p">,</span> <span class="n">length</span> <span class="ow">in</span> <span class="n">states_slots_lengths</span><span class="p">:</span>
+            <span class="n">proposer_index</span> <span class="o">=</span> <span class="n">get_shard_proposer_index</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">slot</span><span class="p">,</span> <span class="n">shard</span><span class="p">)</span>
+            <span class="n">decrease_balance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">proposer_index</span><span class="p">,</span> <span class="n">shard_state</span><span class="p">.</span><span class="n">gasprice</span> <span class="o">*</span> <span class="n">length</span><span class="p">)</span>
+
+        <span class="c1"># Return winning transition root
+</span>        <span class="k">return</span> <span class="n">shard_transition_root</span>
+
+    <span class="c1"># No winning transition root, ensure empty and return empty root
+</span>    <span class="k">assert</span> <span class="n">shard_transition</span> <span class="o">==</span> <span class="n">ShardTransition</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">Root</span><span class="p">()</span>
+</code></pre></div></div>
+
+<h6 id="process_crosslinks"><code class="language-plaintext highlighter-rouge">process_crosslinks</code></h6>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_crosslinks</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+                       <span class="n">shard_transitions</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">ShardTransition</span><span class="p">],</span>
+                       <span class="n">attestations</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Attestation</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">on_time_attestation_slot</span> <span class="o">=</span> <span class="n">compute_previous_slot</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span>
+    <span class="n">committee_count</span> <span class="o">=</span> <span class="n">get_committee_count_per_slot</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">on_time_attestation_slot</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">committee_index</span> <span class="ow">in</span> <span class="nb">map</span><span class="p">(</span><span class="n">CommitteeIndex</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="n">committee_count</span><span class="p">)):</span>
+        <span class="c1"># All attestations in the block for this committee/shard and current slot
+</span>        <span class="n">shard</span> <span class="o">=</span> <span class="n">compute_shard_from_committee_index</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">committee_index</span><span class="p">,</span> <span class="n">on_time_attestation_slot</span><span class="p">)</span>
+        <span class="c1"># Since the attestations are validated, all `shard_attestations` satisfy `attestation.data.shard == shard`
+</span>        <span class="n">shard_attestations</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">attestation</span> <span class="k">for</span> <span class="n">attestation</span> <span class="ow">in</span> <span class="n">attestations</span>
+            <span class="k">if</span> <span class="n">is_on_time_attestation</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">)</span> <span class="ow">and</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">index</span> <span class="o">==</span> <span class="n">committee_index</span>
+        <span class="p">]</span>
+        <span class="n">winning_root</span> <span class="o">=</span> <span class="n">process_crosslink_for_shard</span><span class="p">(</span>
+            <span class="n">state</span><span class="p">,</span> <span class="n">committee_index</span><span class="p">,</span> <span class="n">shard_transitions</span><span class="p">[</span><span class="n">shard</span><span class="p">],</span> <span class="n">shard_attestations</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">winning_root</span> <span class="o">!=</span> <span class="n">Root</span><span class="p">():</span>
+            <span class="c1"># Mark relevant pending attestations as creating a successful crosslink
+</span>            <span class="k">for</span> <span class="n">pending_attestation</span> <span class="ow">in</span> <span class="n">state</span><span class="p">.</span><span class="n">current_epoch_attestations</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">is_winning_attestation</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">pending_attestation</span><span class="p">,</span> <span class="n">committee_index</span><span class="p">,</span> <span class="n">winning_root</span><span class="p">):</span>
+                    <span class="n">pending_attestation</span><span class="p">.</span><span class="n">crosslink_success</span> <span class="o">=</span> <span class="bp">True</span>
+</code></pre></div></div>
+
+<h6 id="verify_empty_shard_transition"><code class="language-plaintext highlighter-rouge">verify_empty_shard_transition</code></h6>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">verify_empty_shard_transition</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">shard_transitions</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">ShardTransition</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="s">"""
+    Verify that a `shard_transition` in a block is empty if an attestation was not processed for it.
+    """</span>
+    <span class="k">for</span> <span class="n">shard</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">get_active_shard_count</span><span class="p">(</span><span class="n">state</span><span class="p">)):</span>
+        <span class="k">if</span> <span class="n">state</span><span class="p">.</span><span class="n">shard_states</span><span class="p">[</span><span class="n">shard</span><span class="p">].</span><span class="n">slot</span> <span class="o">!=</span> <span class="n">compute_previous_slot</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">slot</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">shard_transitions</span><span class="p">[</span><span class="n">shard</span><span class="p">]</span> <span class="o">!=</span> <span class="n">ShardTransition</span><span class="p">():</span>
+                <span class="k">return</span> <span class="bp">False</span>
+    <span class="k">return</span> <span class="bp">True</span>
+</code></pre></div></div>
+
+<h6 id="process_shard_transitions"><code class="language-plaintext highlighter-rouge">process_shard_transitions</code></h6>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_shard_transitions</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span>
+                              <span class="n">shard_transitions</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">ShardTransition</span><span class="p">],</span>
+                              <span class="n">attestations</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Attestation</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="c1"># NOTE: We currently set `PHASE_1_FORK_SLOT` to `GENESIS_SLOT` for test vectors.
+</span>    <span class="k">if</span> <span class="n">compute_previous_slot</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">GENESIS_SLOT</span><span class="p">:</span>
+        <span class="c1"># Process crosslinks
+</span>        <span class="n">process_crosslinks</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">shard_transitions</span><span class="p">,</span> <span class="n">attestations</span><span class="p">)</span>
+
+    <span class="c1"># Verify the empty proposal shard states
+</span>    <span class="k">assert</span> <span class="n">verify_empty_shard_transition</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">shard_transitions</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h5 id="new-default-validator-for-deposits">New default validator for deposits</h5>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_validator_from_deposit</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">deposit</span><span class="p">:</span> <span class="n">Deposit</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Validator</span><span class="p">:</span>
+    <span class="n">amount</span> <span class="o">=</span> <span class="n">deposit</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">amount</span>
+    <span class="n">effective_balance</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">amount</span> <span class="o">-</span> <span class="n">amount</span> <span class="o">%</span> <span class="n">EFFECTIVE_BALANCE_INCREMENT</span><span class="p">,</span> <span class="n">MAX_EFFECTIVE_BALANCE</span><span class="p">)</span>
+    <span class="n">next_custody_secret_to_reveal</span> <span class="o">=</span> <span class="n">get_custody_period_for_validator</span><span class="p">(</span>
+        <span class="n">ValidatorIndex</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">)),</span>
+        <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">),</span>
+    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">Validator</span><span class="p">(</span>
+        <span class="n">pubkey</span><span class="o">=</span><span class="n">deposit</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">pubkey</span><span class="p">,</span>
+        <span class="n">withdrawal_credentials</span><span class="o">=</span><span class="n">deposit</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">withdrawal_credentials</span><span class="p">,</span>
+        <span class="n">activation_eligibility_epoch</span><span class="o">=</span><span class="n">FAR_FUTURE_EPOCH</span><span class="p">,</span>
+        <span class="n">activation_epoch</span><span class="o">=</span><span class="n">FAR_FUTURE_EPOCH</span><span class="p">,</span>
+        <span class="n">exit_epoch</span><span class="o">=</span><span class="n">FAR_FUTURE_EPOCH</span><span class="p">,</span>
+        <span class="n">withdrawable_epoch</span><span class="o">=</span><span class="n">FAR_FUTURE_EPOCH</span><span class="p">,</span>
+        <span class="n">effective_balance</span><span class="o">=</span><span class="n">effective_balance</span><span class="p">,</span>
+        <span class="n">next_custody_secret_to_reveal</span><span class="o">=</span><span class="n">next_custody_secret_to_reveal</span><span class="p">,</span>
+        <span class="n">all_custody_secrets_revealed_epoch</span><span class="o">=</span><span class="n">FAR_FUTURE_EPOCH</span><span class="p">,</span>
+    <span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="light-client-processing">Light client processing</h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_light_client_aggregate</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">block_body</span><span class="p">:</span> <span class="n">BeaconBlockBody</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">committee</span> <span class="o">=</span> <span class="n">get_light_client_committee</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+    <span class="n">previous_slot</span> <span class="o">=</span> <span class="n">compute_previous_slot</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span>
+    <span class="n">previous_block_root</span> <span class="o">=</span> <span class="n">get_block_root_at_slot</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">previous_slot</span><span class="p">)</span>
+
+    <span class="n">total_reward</span> <span class="o">=</span> <span class="n">Gwei</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">signer_pubkeys</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">bit_index</span><span class="p">,</span> <span class="n">participant_index</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">committee</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">block_body</span><span class="p">.</span><span class="n">light_client_bits</span><span class="p">[</span><span class="n">bit_index</span><span class="p">]:</span>
+            <span class="n">signer_pubkeys</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">[</span><span class="n">participant_index</span><span class="p">].</span><span class="n">pubkey</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">[</span><span class="n">participant_index</span><span class="p">].</span><span class="n">slashed</span><span class="p">:</span>
+                <span class="n">increase_balance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">participant_index</span><span class="p">,</span> <span class="n">get_base_reward</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">participant_index</span><span class="p">))</span>
+                <span class="n">total_reward</span> <span class="o">+=</span> <span class="n">get_base_reward</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">participant_index</span><span class="p">)</span>
+
+    <span class="n">increase_balance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">get_beacon_proposer_index</span><span class="p">(</span><span class="n">state</span><span class="p">),</span> <span class="n">Gwei</span><span class="p">(</span><span class="n">total_reward</span> <span class="o">//</span> <span class="n">PROPOSER_REWARD_QUOTIENT</span><span class="p">))</span>
+
+    <span class="n">signing_root</span> <span class="o">=</span> <span class="n">compute_signing_root</span><span class="p">(</span><span class="n">previous_block_root</span><span class="p">,</span>
+                                        <span class="n">get_domain</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">DOMAIN_LIGHT_CLIENT</span><span class="p">,</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">previous_slot</span><span class="p">)))</span>
+    <span class="k">assert</span> <span class="n">optional_fast_aggregate_verify</span><span class="p">(</span><span class="n">signer_pubkeys</span><span class="p">,</span> <span class="n">signing_root</span><span class="p">,</span> <span class="n">block_body</span><span class="p">.</span><span class="n">light_client_signature</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="epoch-transition">Epoch transition</h3>
+
+<p>This epoch transition overrides the phase0 epoch transition:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_epoch</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">process_justification_and_finalization</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="n">process_rewards_and_penalties</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="n">process_registry_updates</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="n">process_reveal_deadlines</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="n">process_challenge_deadlines</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="n">process_slashings</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="n">process_final_updates</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>  <span class="c1"># phase 0 final updates
+</span>    <span class="n">process_phase_1_final_updates</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="phase-1-final-updates">Phase 1 final updates</h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_phase_1_final_updates</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">process_custody_final_updates</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="n">process_online_tracking</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+    <span class="n">process_light_client_committee_updates</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+
+    <span class="c1"># Update current_epoch_start_shard
+</span>    <span class="n">state</span><span class="p">.</span><span class="n">current_epoch_start_shard</span> <span class="o">=</span> <span class="n">get_start_shard</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">Slot</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">slot</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+</code></pre></div></div>
+
+<h4 id="custody-game-updates">Custody game updates</h4>
+
+<p><code class="language-plaintext highlighter-rouge">process_reveal_deadlines</code>, <code class="language-plaintext highlighter-rouge">process_challenge_deadlines</code> and <code class="language-plaintext highlighter-rouge">process_custody_final_updates</code> are defined in <a href="/eth2specs/specs/phase1/custody-game.html">the Custody Game spec</a>,</p>
+
+<h4 id="online-tracking">Online-tracking</h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_online_tracking</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="c1"># Slowly remove validators from the "online" set if they do not show up
+</span>    <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">validators</span><span class="p">)):</span>
+        <span class="k">if</span> <span class="n">state</span><span class="p">.</span><span class="n">online_countdown</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">state</span><span class="p">.</span><span class="n">online_countdown</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">online_countdown</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span>
+
+    <span class="c1"># Process pending attestations
+</span>    <span class="k">for</span> <span class="n">pending_attestation</span> <span class="ow">in</span> <span class="n">state</span><span class="p">.</span><span class="n">current_epoch_attestations</span> <span class="o">+</span> <span class="n">state</span><span class="p">.</span><span class="n">previous_epoch_attestations</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">get_attesting_indices</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">pending_attestation</span><span class="p">.</span><span class="n">data</span><span class="p">,</span> <span class="n">pending_attestation</span><span class="p">.</span><span class="n">aggregation_bits</span><span class="p">):</span>
+            <span class="n">state</span><span class="p">.</span><span class="n">online_countdown</span><span class="p">[</span><span class="n">index</span><span class="p">]</span> <span class="o">=</span> <span class="n">ONLINE_PERIOD</span>
+</code></pre></div></div>
+
+<h4 id="light-client-committee-updates">Light client committee updates</h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_light_client_committee_updates</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="s">"""
+    Update light client committees.
+    """</span>
+    <span class="n">next_epoch</span> <span class="o">=</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">Slot</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">slot</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">next_epoch</span> <span class="o">%</span> <span class="n">LIGHT_CLIENT_COMMITTEE_PERIOD</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">state</span><span class="p">.</span><span class="n">current_light_committee</span> <span class="o">=</span> <span class="n">state</span><span class="p">.</span><span class="n">next_light_committee</span>
+        <span class="n">new_committee</span> <span class="o">=</span> <span class="n">get_light_client_committee</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">next_epoch</span> <span class="o">+</span> <span class="n">LIGHT_CLIENT_COMMITTEE_PERIOD</span><span class="p">)</span>
+        <span class="n">state</span><span class="p">.</span><span class="n">next_light_committee</span> <span class="o">=</span> <span class="n">committee_to_compact_committee</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">new_committee</span><span class="p">)</span>
+</code></pre></div></div>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

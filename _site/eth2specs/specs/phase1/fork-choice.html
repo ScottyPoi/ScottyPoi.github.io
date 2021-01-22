@@ -1,0 +1,139 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="ethereum-20-phase-1--beacon-chain-fork-choice">Ethereum 2.0 Phase 1 – Beacon Chain Fork Choice</h1>
+
+<p><strong>Notice</strong>: This document is a work-in-progress for researchers and implementers.</p>
+
+<h2 id="table-of-contents">Table of contents</h2>
+<!-- TOC -->
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+<ul>
+  <li><a href="#introduction">Introduction</a>
+    <ul>
+      <li><a href="#updated-data-structures">Updated data structures</a>
+        <ul>
+          <li><a href="#extended-store">Extended <code class="language-plaintext highlighter-rouge">Store</code></a></li>
+        </ul>
+      </li>
+      <li><a href="#new-data-structures">New data structures</a>
+        <ul>
+          <li><a href="#shardlatestmessage"><code class="language-plaintext highlighter-rouge">ShardLatestMessage</code></a></li>
+          <li><a href="#shardstore"><code class="language-plaintext highlighter-rouge">ShardStore</code></a></li>
+        </ul>
+      </li>
+      <li><a href="#updated-helpers">Updated helpers</a>
+        <ul>
+          <li><a href="#updated-get_forkchoice_store">Updated <code class="language-plaintext highlighter-rouge">get_forkchoice_store</code></a></li>
+          <li><a href="#updated-update_latest_messages">Updated <code class="language-plaintext highlighter-rouge">update_latest_messages</code></a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+<!-- /TOC -->
+
+<h2 id="introduction">Introduction</h2>
+
+<p>This document is the beacon chain fork choice spec for part of Ethereum 2.0 Phase 1.</p>
+
+<h3 id="updated-data-structures">Updated data structures</h3>
+
+<h4 id="extended-store">Extended <code class="language-plaintext highlighter-rouge">Store</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">@</span><span class="n">dataclass</span>
+<span class="k">class</span> <span class="nc">Store</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="n">time</span><span class="p">:</span> <span class="n">uint64</span>
+    <span class="n">genesis_time</span><span class="p">:</span> <span class="n">uint64</span>
+    <span class="n">justified_checkpoint</span><span class="p">:</span> <span class="n">Checkpoint</span>
+    <span class="n">finalized_checkpoint</span><span class="p">:</span> <span class="n">Checkpoint</span>
+    <span class="n">best_justified_checkpoint</span><span class="p">:</span> <span class="n">Checkpoint</span>
+    <span class="n">blocks</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Root</span><span class="p">,</span> <span class="n">BeaconBlock</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="n">block_states</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Root</span><span class="p">,</span> <span class="n">BeaconState</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="n">checkpoint_states</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Checkpoint</span><span class="p">,</span> <span class="n">BeaconState</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="n">latest_messages</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">ValidatorIndex</span><span class="p">,</span> <span class="n">LatestMessage</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="n">shard_stores</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Shard</span><span class="p">,</span> <span class="n">ShardStore</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="new-data-structures">New data structures</h3>
+
+<h4 id="shardlatestmessage"><code class="language-plaintext highlighter-rouge">ShardLatestMessage</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">@</span><span class="n">dataclass</span><span class="p">(</span><span class="n">eq</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">frozen</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">ShardLatestMessage</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="n">epoch</span><span class="p">:</span> <span class="n">Epoch</span>
+    <span class="n">root</span><span class="p">:</span> <span class="n">Root</span>
+</code></pre></div></div>
+
+<h4 id="shardstore"><code class="language-plaintext highlighter-rouge">ShardStore</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">@</span><span class="n">dataclass</span>
+<span class="k">class</span> <span class="nc">ShardStore</span><span class="p">:</span>
+    <span class="n">shard</span><span class="p">:</span> <span class="n">Shard</span>
+    <span class="n">signed_blocks</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Root</span><span class="p">,</span> <span class="n">SignedShardBlock</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="n">block_states</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Root</span><span class="p">,</span> <span class="n">ShardState</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="n">latest_messages</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">ValidatorIndex</span><span class="p">,</span> <span class="n">ShardLatestMessage</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="updated-helpers">Updated helpers</h3>
+
+<h4 id="updated-get_forkchoice_store">Updated <code class="language-plaintext highlighter-rouge">get_forkchoice_store</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_forkchoice_store</span><span class="p">(</span><span class="n">anchor_state</span><span class="p">:</span> <span class="n">BeaconState</span><span class="p">,</span> <span class="n">anchor_block</span><span class="p">:</span> <span class="n">BeaconBlock</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Store</span><span class="p">:</span>
+    <span class="k">assert</span> <span class="n">anchor_block</span><span class="p">.</span><span class="n">state_root</span> <span class="o">==</span> <span class="n">hash_tree_root</span><span class="p">(</span><span class="n">anchor_state</span><span class="p">)</span>
+    <span class="n">anchor_root</span> <span class="o">=</span> <span class="n">hash_tree_root</span><span class="p">(</span><span class="n">anchor_block</span><span class="p">)</span>
+    <span class="n">anchor_epoch</span> <span class="o">=</span> <span class="n">get_current_epoch</span><span class="p">(</span><span class="n">anchor_state</span><span class="p">)</span>
+    <span class="n">justified_checkpoint</span> <span class="o">=</span> <span class="n">Checkpoint</span><span class="p">(</span><span class="n">epoch</span><span class="o">=</span><span class="n">anchor_epoch</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="n">anchor_root</span><span class="p">)</span>
+    <span class="n">finalized_checkpoint</span> <span class="o">=</span> <span class="n">Checkpoint</span><span class="p">(</span><span class="n">epoch</span><span class="o">=</span><span class="n">anchor_epoch</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="n">anchor_root</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">Store</span><span class="p">(</span>
+        <span class="n">time</span><span class="o">=</span><span class="n">anchor_state</span><span class="p">.</span><span class="n">genesis_time</span> <span class="o">+</span> <span class="n">SECONDS_PER_SLOT</span> <span class="o">*</span> <span class="n">anchor_state</span><span class="p">.</span><span class="n">slot</span><span class="p">,</span>
+        <span class="n">genesis_time</span><span class="o">=</span><span class="n">anchor_state</span><span class="p">.</span><span class="n">genesis_time</span><span class="p">,</span>
+        <span class="n">justified_checkpoint</span><span class="o">=</span><span class="n">justified_checkpoint</span><span class="p">,</span>
+        <span class="n">finalized_checkpoint</span><span class="o">=</span><span class="n">finalized_checkpoint</span><span class="p">,</span>
+        <span class="n">best_justified_checkpoint</span><span class="o">=</span><span class="n">justified_checkpoint</span><span class="p">,</span>
+        <span class="n">blocks</span><span class="o">=</span><span class="p">{</span><span class="n">anchor_root</span><span class="p">:</span> <span class="n">copy</span><span class="p">(</span><span class="n">anchor_block</span><span class="p">)},</span>
+        <span class="n">block_states</span><span class="o">=</span><span class="p">{</span><span class="n">anchor_root</span><span class="p">:</span> <span class="n">anchor_state</span><span class="p">.</span><span class="n">copy</span><span class="p">()},</span>
+        <span class="n">checkpoint_states</span><span class="o">=</span><span class="p">{</span><span class="n">justified_checkpoint</span><span class="p">:</span> <span class="n">anchor_state</span><span class="p">.</span><span class="n">copy</span><span class="p">()},</span>
+        <span class="n">shard_stores</span><span class="o">=</span><span class="p">{</span>
+            <span class="n">Shard</span><span class="p">(</span><span class="n">shard</span><span class="p">):</span> <span class="n">get_forkchoice_shard_store</span><span class="p">(</span><span class="n">anchor_state</span><span class="p">,</span> <span class="n">Shard</span><span class="p">(</span><span class="n">shard</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">shard</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">get_active_shard_count</span><span class="p">(</span><span class="n">anchor_state</span><span class="p">))</span>
+        <span class="p">}</span>
+    <span class="p">)</span>
+</code></pre></div></div>
+
+<h4 id="updated-update_latest_messages">Updated <code class="language-plaintext highlighter-rouge">update_latest_messages</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">update_latest_messages</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Store</span><span class="p">,</span> <span class="n">attesting_indices</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">ValidatorIndex</span><span class="p">],</span> <span class="n">attestation</span><span class="p">:</span> <span class="n">Attestation</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">target</span> <span class="o">=</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">target</span>
+    <span class="n">beacon_block_root</span> <span class="o">=</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">beacon_block_root</span>
+    <span class="c1"># TODO: separate shard chain vote
+</span>    <span class="n">shard</span> <span class="o">=</span> <span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">shard</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">attesting_indices</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">i</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">store</span><span class="p">.</span><span class="n">latest_messages</span> <span class="ow">or</span> <span class="n">target</span><span class="p">.</span><span class="n">epoch</span> <span class="o">&gt;</span> <span class="n">store</span><span class="p">.</span><span class="n">latest_messages</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">epoch</span><span class="p">:</span>
+            <span class="n">store</span><span class="p">.</span><span class="n">latest_messages</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">LatestMessage</span><span class="p">(</span><span class="n">epoch</span><span class="o">=</span><span class="n">target</span><span class="p">.</span><span class="n">epoch</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="n">beacon_block_root</span><span class="p">)</span>
+            <span class="n">shard_latest_message</span> <span class="o">=</span> <span class="n">ShardLatestMessage</span><span class="p">(</span><span class="n">epoch</span><span class="o">=</span><span class="n">target</span><span class="p">.</span><span class="n">epoch</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="n">attestation</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">shard_head_root</span><span class="p">)</span>
+            <span class="n">store</span><span class="p">.</span><span class="n">shard_stores</span><span class="p">[</span><span class="n">shard</span><span class="p">].</span><span class="n">latest_messages</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">shard_latest_message</span>
+</code></pre></div></div>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

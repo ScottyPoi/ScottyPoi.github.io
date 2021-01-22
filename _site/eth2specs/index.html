@@ -1,0 +1,105 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="ethereum-20-specifications">Ethereum 2.0 Specifications</h1>
+
+<p><a href="https://discord.gg/qGpsxSA"><img src="https://img.shields.io/badge/chat-on%20discord-blue.svg" alt="Join the chat at https://discord.gg/qGpsxSA" /></a> <a href="https://gitter.im/ethereum/sharding?utm_source=badge&amp;utm_medium=badge&amp;utm_campaign=pr-badge&amp;utm_content=badge"><img src="https://badges.gitter.im/ethereum/sharding.svg" alt="Join the chat at https://gitter.im/ethereum/sharding" /></a></p>
+
+<p>To learn more about sharding and Ethereum 2.0 (Serenity), see the <a href="https://eth.wiki/sharding/Sharding-FAQs">sharding FAQ</a> and the <a href="https://notes.ethereum.org/s/H1PGqDhpm">research compendium</a>.</p>
+
+<p>This repository hosts the current Eth2 specifications. Discussions about design rationale and proposed changes can be brought up and discussed as issues. Solidified, agreed-upon changes to the spec can be made through pull requests.</p>
+
+<h2 id="specs">Specs</h2>
+
+<p><a href="https://github.com/ethereum/eth2.0-specs/releases/"><img src="https://img.shields.io/github/v/release/ethereum/eth2.0-specs" alt="GitHub release" /></a> <a href="https://badge.fury.io/py/eth2spec"><img src="https://badge.fury.io/py/eth2spec.svg" alt="PyPI version" /></a></p>
+
+<p>Core specifications for Eth2 clients be found in <a href="specs/">specs</a>. These are divided into phases. Each subsequent phase depends upon the prior. The current phases specified are:</p>
+
+<h3 id="phase-0">Phase 0</h3>
+
+<ul>
+  <li><a href="/eth2specs/specs/phase0/beacon-chain.html">The Beacon Chain</a></li>
+  <li><a href="/eth2specs/specs/phase0/fork-choice.html">Beacon Chain Fork Choice</a></li>
+  <li><a href="/eth2specs/specs/phase0/deposit-contract.html">Deposit Contract</a></li>
+  <li><a href="/eth2specs/specs/phase0/validator.html">Honest Validator</a></li>
+  <li><a href="/eth2specs/specs/phase0/p2p-interface.html">P2P Networking</a></li>
+</ul>
+
+<h3 id="light-clients">Light clients</h3>
+
+<ul>
+  <li><a href="/eth2specs/specs/lightclient/beacon-chain.html">Beacon chain changes</a></li>
+  <li><a href="/eth2specs/specs/lightclient/sync-protocol.html">Light client sync protocol</a></li>
+</ul>
+
+<h3 id="sharding">Sharding</h3>
+
+<p>The sharding spec is still actively in R&amp;D; see the most recent available pull request <a href="https://github.com/ethereum/eth2.0-specs/pull/2146">here</a> and some technical details <a href="https://hackmd.io/@HWeNw8hNRimMm2m2GH56Cw/B1YJPGkpD">here</a>.</p>
+
+<h3 id="merge">Merge</h3>
+
+<p>The merge is still actively in R&amp;D; see an <a href="https://ethresear.ch">ethresear.ch</a> post describing the proposed basic mechanism <a href="https://ethresear.ch/t/the-eth1-eth2-transition/6265">here</a> and the section of <a href="https://ethereum.org">ethereum.org</a> describing the merge at a high level <a href="https://ethereum.org/en/eth2/docking/">here</a>.</p>
+
+<h3 id="accompanying-documents-can-be-found-in-specs-and-include">Accompanying documents can be found in <a href="specs">specs</a> and include:</h3>
+
+<ul>
+  <li><a href="/eth2specs/ssz/simple-serialize.html">SimpleSerialize (SSZ) spec</a></li>
+  <li><a href="/eth2specs/ssz/merkle-proofs.html">Merkle proof formats</a></li>
+  <li><a href="/eth2specs/tests/formats/">General test format</a></li>
+</ul>
+
+<h2 id="additional-specifications-for-client-implementers">Additional specifications for client implementers</h2>
+
+<p>Additional specifications and standards outside of requisite client functionality can be found in the following repos:</p>
+
+<ul>
+  <li><a href="https://github.com/ethereum/eth2.0-apis">Eth2 APIs</a></li>
+  <li><a href="https://github.com/ethereum/eth2.0-metrics/">Eth2 Metrics</a></li>
+  <li><a href="https://github.com/ethereum/eth2.0-pm/tree/master/interop">Interop Standards in Eth2 PM</a></li>
+</ul>
+
+<h2 id="design-goals">Design goals</h2>
+
+<p>The following are the broad design goals for Ethereum 2.0:</p>
+<ul>
+  <li>to minimize complexity, even at the cost of some losses in efficiency</li>
+  <li>to remain live through major network partitions and when very large portions of nodes go offline</li>
+  <li>to select all components such that they are either quantum secure or can be easily swapped out for quantum secure counterparts when available</li>
+  <li>to utilize crypto and design techniques that allow for a large participation of validators in total and per unit time</li>
+  <li>to allow for a typical consumer laptop with <code class="language-plaintext highlighter-rouge">O(C)</code> resources to process/validate <code class="language-plaintext highlighter-rouge">O(1)</code> shards (including any system level validation such as the beacon chain)</li>
+</ul>
+
+<h2 id="useful-external-resources">Useful external resources</h2>
+
+<ul>
+  <li><a href="https://notes.ethereum.org/s/rkhCgQteN#">Design Rationale</a></li>
+  <li><a href="https://notes.ethereum.org/s/Bkn3zpwxB">Phase 0 Onboarding Document</a></li>
+  <li><a href="https://arxiv.org/abs/2003.03052">Combining GHOST and Casper paper</a></li>
+</ul>
+
+<h2 id="for-spec-contributors">For spec contributors</h2>
+
+<p>Documentation on the different components used during spec writing can be found here:</p>
+<ul>
+  <li><a href="/eth2specs/tests/generators/">YAML Test Generators</a></li>
+  <li><a href="/eth2specs/tests/core/pyspec/">Executable Python Spec, with Py-tests</a></li>
+</ul>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

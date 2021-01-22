@@ -1,0 +1,95 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="eth2-executable-python-spec-pyspec">Eth2 Executable Python Spec (PySpec)</h1>
+
+<p>The executable Python spec is built from the Eth2 specification, 
+ complemented with the necessary helper functions for hashing, BLS, and more.</p>
+
+<p>With this executable spec,
+ test-generators can easily create test-vectors for client implementations,
+ and the spec itself can be verified to be consistent and coherent through sanity tests implemented with pytest.</p>
+
+<h2 id="building">Building</h2>
+
+<p>To build the pyspec: <code class="language-plaintext highlighter-rouge">python setup.py build</code>
+ (or <code class="language-plaintext highlighter-rouge">pip install .</code>, but beware that ignored files will still be copied over to a temporary dir, due to pip issue 2195).
+This outputs the build files to the <code class="language-plaintext highlighter-rouge">./build/lib/eth2spec/...</code> dir, and can’t be used for local test running. Instead, use the dev-install as described below.</p>
+
+<h2 id="dev-install">Dev Install</h2>
+
+<p>All the dynamic parts of the spec are automatically built with <code class="language-plaintext highlighter-rouge">python setup.py pyspecdev</code>.
+Unlike the regular install, this outputs spec files to their original source location, instead of build output only.</p>
+
+<p>Alternatively, you can build a sub-set of the pyspec with the distutil command:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>python setup.py pyspec <span class="nt">--spec-fork</span><span class="o">=</span>phase0 <span class="nt">--md-doc-paths</span><span class="o">=</span><span class="s2">"specs/phase0/beacon-chain.md specs/phase0/fork-choice.md"</span> <span class="nt">--out-dir</span><span class="o">=</span>my_spec_dir
+</code></pre></div></div>
+
+<h2 id="py-tests">Py-tests</h2>
+
+<p>After installing, you can install the optional dependencies for testing and linting.
+With makefile: <code class="language-plaintext highlighter-rouge">make install_test</code>.
+Or manually: run <code class="language-plaintext highlighter-rouge">pip install .[test]</code> and <code class="language-plaintext highlighter-rouge">pip install .[lint]</code>.</p>
+
+<p>These tests are not intended for client-consumption.
+These tests are testing the spec itself, to verify consistency and provide feedback on modifications of the spec.
+However, most of the tests can be run in generator-mode, to output test vectors for client-consumption.</p>
+
+<h3 id="how-to-run-tests">How to run tests</h3>
+
+<h4 id="automated">Automated</h4>
+
+<p>Run <code class="language-plaintext highlighter-rouge">make test</code> from the root of the specs repository (after running <code class="language-plaintext highlighter-rouge">make install_test</code> if have not before).</p>
+
+<h4 id="manual">Manual</h4>
+
+<p>From the repository root:</p>
+
+<p>Install venv and install:</p>
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>python3 <span class="nt">-m</span> venv venv
+<span class="nb">.</span> venv/bin/activate
+python setup.py pyspecdev
+</code></pre></div></div>
+
+<p>Run the test command from the <code class="language-plaintext highlighter-rouge">tests/core/pyspec</code> directory:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pytest --config=minimal eth2spec
+</code></pre></div></div>
+
+<p>Options:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">--config</code>, to change the config. Defaults to <code class="language-plaintext highlighter-rouge">minimal</code>, can be set to <code class="language-plaintext highlighter-rouge">mainnet</code>, or other configs from the configs directory.</li>
+  <li><code class="language-plaintext highlighter-rouge">--disable-bls</code>, to disable BLS (only for tests that can run without)</li>
+  <li><code class="language-plaintext highlighter-rouge">--bls-type</code>, <code class="language-plaintext highlighter-rouge">milagro</code> or <code class="language-plaintext highlighter-rouge">py_ecc</code> (default)</li>
+</ul>
+
+<h3 id="how-to-view-code-coverage-report">How to view code coverage report</h3>
+
+<p>Run <code class="language-plaintext highlighter-rouge">make open_cov</code> from the root of the specs repository after running <code class="language-plaintext highlighter-rouge">make test</code> to open the html code coverage report.</p>
+
+<h2 id="contributing">Contributing</h2>
+
+<p>Contributions are welcome, but consider implementing your idea as part of the spec itself first.
+The pyspec is not a replacement.</p>
+
+<h2 id="license">License</h2>
+
+<p>Same as the spec itself; see <a href="/eth2specs/LICENSE">LICENSE</a> file in the specs repository root.</p>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

@@ -1,0 +1,254 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="minimal-light-client">Minimal Light Client</h1>
+
+<p><strong>Notice</strong>: This document is a work-in-progress for researchers and implementers.</p>
+
+<h2 id="table-of-contents">Table of contents</h2>
+
+<!-- TOC -->
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+<ul>
+  <li><a href="#introduction">Introduction</a></li>
+  <li><a href="#constants">Constants</a></li>
+  <li><a href="#configuration">Configuration</a>
+    <ul>
+      <li><a href="#misc">Misc</a></li>
+      <li><a href="#time-parameters">Time parameters</a></li>
+    </ul>
+  </li>
+  <li><a href="#containers">Containers</a>
+    <ul>
+      <li><a href="#lightclientsnapshot"><code class="language-plaintext highlighter-rouge">LightClientSnapshot</code></a></li>
+      <li><a href="#lightclientupdate"><code class="language-plaintext highlighter-rouge">LightClientUpdate</code></a></li>
+      <li><a href="#lightclientstore"><code class="language-plaintext highlighter-rouge">LightClientStore</code></a></li>
+    </ul>
+  </li>
+  <li><a href="#light-client-state-updates">Light client state updates</a>
+    <ul>
+      <li><a href="#is_valid_light_client_update"><code class="language-plaintext highlighter-rouge">is_valid_light_client_update</code></a></li>
+      <li><a href="#apply_light_client_update"><code class="language-plaintext highlighter-rouge">apply_light_client_update</code></a></li>
+      <li><a href="#process_light_client_update"><code class="language-plaintext highlighter-rouge">process_light_client_update</code></a></li>
+    </ul>
+  </li>
+</ul>
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+<!-- /TOC -->
+
+<h2 id="introduction">Introduction</h2>
+
+<p>Eth2 is designed to be light client friendly for constrained environments to
+access Eth2 with reasonable safety and liveness.
+Such environments include resource-constrained devices (e.g. phones for trust-minimised wallets)
+and metered VMs (e.g. blockchain VMs for cross-chain bridges).</p>
+
+<p>This document suggests a minimal light client design for the beacon chain that
+uses sync committees introduced in <a href="/eth2specs/specs/lightclient/beacon-chain.html">this beacon chain extension</a>.</p>
+
+<h2 id="constants">Constants</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">FINALIZED_ROOT_INDEX</code></td>
+      <td><code class="language-plaintext highlighter-rouge">Index(BeaconState, 'finalized_checkpoint', 'root')</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">NEXT_SYNC_COMMITTEE_INDEX</code></td>
+      <td><code class="language-plaintext highlighter-rouge">Index(BeaconState, 'next_sync_committee')</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="configuration">Configuration</h2>
+
+<h3 id="misc">Misc</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">MIN_SYNC_COMMITTEE_PARTICIPANTS</code></td>
+      <td><code class="language-plaintext highlighter-rouge">1</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">MAX_VALID_LIGHT_CLIENT_UPDATES</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64(2**64 - 1)</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="time-parameters">Time parameters</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+      <th style="text-align: center">Unit</th>
+      <th style="text-align: center">Duration</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">LIGHT_CLIENT_UPDATE_TIMEOUT</code></td>
+      <td><code class="language-plaintext highlighter-rouge">Slot(2**13)</code></td>
+      <td style="text-align: center">slots</td>
+      <td style="text-align: center">~27 hours</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="containers">Containers</h2>
+
+<h4 id="lightclientsnapshot"><code class="language-plaintext highlighter-rouge">LightClientSnapshot</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">LightClientSnapshot</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="c1"># Beacon block header
+</span>    <span class="n">header</span><span class="p">:</span> <span class="n">BeaconBlockHeader</span>
+    <span class="c1"># Sync committees corresponding to the header
+</span>    <span class="n">current_sync_committee</span><span class="p">:</span> <span class="n">SyncCommittee</span>
+    <span class="n">next_sync_committee</span><span class="p">:</span> <span class="n">SyncCommittee</span>
+</code></pre></div></div>
+
+<h4 id="lightclientupdate"><code class="language-plaintext highlighter-rouge">LightClientUpdate</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">LightClientUpdate</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="c1"># Update beacon block header
+</span>    <span class="n">header</span><span class="p">:</span> <span class="n">BeaconBlockHeader</span>
+    <span class="c1"># Next sync committee corresponding to the header
+</span>    <span class="n">next_sync_committee</span><span class="p">:</span> <span class="n">SyncCommittee</span>
+    <span class="n">next_sync_committee_branch</span><span class="p">:</span> <span class="n">Vector</span><span class="p">[</span><span class="n">Bytes32</span><span class="p">,</span> <span class="n">log2</span><span class="p">(</span><span class="n">NEXT_SYNC_COMMITTEE_INDEX</span><span class="p">)]</span>
+    <span class="c1"># Finality proof for the update header
+</span>    <span class="n">finality_header</span><span class="p">:</span> <span class="n">BeaconBlockHeader</span>
+    <span class="n">finality_branch</span><span class="p">:</span> <span class="n">Vector</span><span class="p">[</span><span class="n">Bytes32</span><span class="p">,</span> <span class="n">log2</span><span class="p">(</span><span class="n">FINALIZED_ROOT_INDEX</span><span class="p">)]</span>
+    <span class="c1"># Sync committee aggregate signature
+</span>    <span class="n">sync_committee_bits</span><span class="p">:</span> <span class="n">Bitvector</span><span class="p">[</span><span class="n">SYNC_COMMITTEE_SIZE</span><span class="p">]</span>
+    <span class="n">sync_committee_signature</span><span class="p">:</span> <span class="n">BLSSignature</span>
+    <span class="c1"># Fork version for the aggregate signature
+</span>    <span class="n">fork_version</span><span class="p">:</span> <span class="n">Version</span>
+</code></pre></div></div>
+
+<h4 id="lightclientstore"><code class="language-plaintext highlighter-rouge">LightClientStore</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">LightClientStore</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="n">snapshot</span><span class="p">:</span> <span class="n">LightClientSnapshot</span>
+    <span class="n">valid_updates</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">LightClientUpdate</span><span class="p">,</span> <span class="n">MAX_VALID_LIGHT_CLIENT_UPDATES</span><span class="p">]</span>
+</code></pre></div></div>
+
+<h2 id="light-client-state-updates">Light client state updates</h2>
+
+<p>A light client maintains its state in a <code class="language-plaintext highlighter-rouge">store</code> object of type <code class="language-plaintext highlighter-rouge">LightClientStore</code> and receives <code class="language-plaintext highlighter-rouge">update</code> objects of type <code class="language-plaintext highlighter-rouge">LightClientUpdate</code>. Every <code class="language-plaintext highlighter-rouge">update</code> triggers <code class="language-plaintext highlighter-rouge">process_light_client_update(store, update, current_slot)</code> where <code class="language-plaintext highlighter-rouge">current_slot</code> is the current slot based on some local clock.</p>
+
+<h4 id="is_valid_light_client_update"><code class="language-plaintext highlighter-rouge">is_valid_light_client_update</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">is_valid_light_client_update</span><span class="p">(</span><span class="n">snapshot</span><span class="p">:</span> <span class="n">LightClientSnapshot</span><span class="p">,</span> <span class="n">update</span><span class="p">:</span> <span class="n">LightClientUpdate</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="c1"># Verify update slot is larger than snapshot slot
+</span>    <span class="k">assert</span> <span class="n">update</span><span class="p">.</span><span class="n">header</span><span class="p">.</span><span class="n">slot</span> <span class="o">&gt;</span> <span class="n">snapshot</span><span class="p">.</span><span class="n">header</span><span class="p">.</span><span class="n">slot</span>
+
+    <span class="c1"># Verify update does not skip a sync committee period
+</span>    <span class="n">snapshot_period</span> <span class="o">=</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">snapshot</span><span class="p">.</span><span class="n">header</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span> <span class="o">//</span> <span class="n">EPOCHS_PER_SYNC_COMMITTEE_PERIOD</span>
+    <span class="n">update_period</span> <span class="o">=</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">update</span><span class="p">.</span><span class="n">header</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span> <span class="o">//</span> <span class="n">EPOCHS_PER_SYNC_COMMITTEE_PERIOD</span>
+    <span class="k">assert</span> <span class="n">update_period</span> <span class="ow">in</span> <span class="p">(</span><span class="n">snapshot_period</span><span class="p">,</span> <span class="n">snapshot_period</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+
+    <span class="c1"># Verify update header root is the finalized root of the finality header, if specified
+</span>    <span class="k">if</span> <span class="n">update</span><span class="p">.</span><span class="n">finality_header</span> <span class="o">==</span> <span class="n">BeaconBlockHeader</span><span class="p">():</span>
+        <span class="n">signed_header</span> <span class="o">=</span> <span class="n">update</span><span class="p">.</span><span class="n">header</span>
+        <span class="k">assert</span> <span class="n">update</span><span class="p">.</span><span class="n">finality_branch</span> <span class="o">==</span> <span class="p">[</span><span class="n">ZERO_HASH</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">log2</span><span class="p">(</span><span class="n">FINALIZED_ROOT_INDEX</span><span class="p">))]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">signed_header</span> <span class="o">=</span> <span class="n">update</span><span class="p">.</span><span class="n">finality_header</span>
+        <span class="k">assert</span> <span class="n">is_valid_merkle_branch</span><span class="p">(</span>
+            <span class="n">leaf</span><span class="o">=</span><span class="n">hash_tree_root</span><span class="p">(</span><span class="n">update</span><span class="p">.</span><span class="n">header</span><span class="p">),</span>
+            <span class="n">branch</span><span class="o">=</span><span class="n">update</span><span class="p">.</span><span class="n">finality_branch</span><span class="p">,</span>
+            <span class="n">depth</span><span class="o">=</span><span class="n">log2</span><span class="p">(</span><span class="n">FINALIZED_ROOT_INDEX</span><span class="p">),</span>
+            <span class="n">index</span><span class="o">=</span><span class="n">FINALIZED_ROOT_INDEX</span> <span class="o">%</span> <span class="mi">2</span><span class="o">**</span><span class="n">log2</span><span class="p">(</span><span class="n">FINALIZED_ROOT_INDEX</span><span class="p">),</span>
+            <span class="n">root</span><span class="o">=</span><span class="n">update</span><span class="p">.</span><span class="n">finality_header</span><span class="p">.</span><span class="n">state_root</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="c1"># Verify update next sync committee if the update period incremented
+</span>    <span class="k">if</span> <span class="n">update_period</span> <span class="o">==</span> <span class="n">snapshot_period</span><span class="p">:</span>
+        <span class="n">sync_committee</span> <span class="o">=</span> <span class="n">snapshot</span><span class="p">.</span><span class="n">current_sync_committee</span>
+        <span class="k">assert</span> <span class="n">update</span><span class="p">.</span><span class="n">next_sync_committee_branch</span> <span class="o">==</span> <span class="p">[</span><span class="n">ZERO_HASH</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">log2</span><span class="p">(</span><span class="n">NEXT_SYNC_COMMITTEE_INDEX</span><span class="p">))]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">sync_committee</span> <span class="o">=</span> <span class="n">snapshot</span><span class="p">.</span><span class="n">next_sync_committee</span>
+        <span class="k">assert</span> <span class="n">is_valid_merkle_branch</span><span class="p">(</span>
+            <span class="n">leaf</span><span class="o">=</span><span class="n">hash_tree_root</span><span class="p">(</span><span class="n">update</span><span class="p">.</span><span class="n">next_sync_committee</span><span class="p">),</span>
+            <span class="n">branch</span><span class="o">=</span><span class="n">update</span><span class="p">.</span><span class="n">next_sync_committee_branch</span><span class="p">,</span>
+            <span class="n">depth</span><span class="o">=</span><span class="n">log2</span><span class="p">(</span><span class="n">NEXT_SYNC_COMMITTEE_INDEX</span><span class="p">),</span>
+            <span class="n">index</span><span class="o">=</span><span class="n">NEXT_SYNC_COMMITTEE_INDEX</span> <span class="o">%</span> <span class="mi">2</span><span class="o">**</span><span class="n">log2</span><span class="p">(</span><span class="n">NEXT_SYNC_COMMITTEE_INDEX</span><span class="p">),</span>
+            <span class="n">root</span><span class="o">=</span><span class="n">update</span><span class="p">.</span><span class="n">header</span><span class="p">.</span><span class="n">state_root</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="c1"># Verify sync committee has sufficient participants
+</span>    <span class="k">assert</span> <span class="nb">sum</span><span class="p">(</span><span class="n">update</span><span class="p">.</span><span class="n">sync_committee_bits</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">MIN_SYNC_COMMITTEE_PARTICIPANTS</span>
+
+    <span class="c1"># Verify sync committee aggregate signature
+</span>    <span class="n">participant_pubkeys</span> <span class="o">=</span> <span class="p">[</span><span class="n">pubkey</span> <span class="k">for</span> <span class="p">(</span><span class="n">bit</span><span class="p">,</span> <span class="n">pubkey</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">update</span><span class="p">.</span><span class="n">sync_committee_bits</span><span class="p">,</span> <span class="n">sync_committee</span><span class="p">.</span><span class="n">pubkeys</span><span class="p">)</span> <span class="k">if</span> <span class="n">bit</span><span class="p">]</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">compute_domain</span><span class="p">(</span><span class="n">DOMAIN_SYNC_COMMITTEE</span><span class="p">,</span> <span class="n">update</span><span class="p">.</span><span class="n">fork_version</span><span class="p">)</span>
+    <span class="n">signing_root</span> <span class="o">=</span> <span class="n">compute_signing_root</span><span class="p">(</span><span class="n">signed_header</span><span class="p">,</span> <span class="n">domain</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">bls</span><span class="p">.</span><span class="n">FastAggregateVerify</span><span class="p">(</span><span class="n">participant_pubkeys</span><span class="p">,</span> <span class="n">signing_root</span><span class="p">,</span> <span class="n">update</span><span class="p">.</span><span class="n">sync_committee_signature</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="bp">True</span>
+</code></pre></div></div>
+
+<h4 id="apply_light_client_update"><code class="language-plaintext highlighter-rouge">apply_light_client_update</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">apply_light_client_update</span><span class="p">(</span><span class="n">snapshot</span><span class="p">:</span> <span class="n">LightClientSnapshot</span><span class="p">,</span> <span class="n">update</span><span class="p">:</span> <span class="n">LightClientUpdate</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">snapshot_period</span> <span class="o">=</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">snapshot</span><span class="p">.</span><span class="n">header</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span> <span class="o">//</span> <span class="n">EPOCHS_PER_SYNC_COMMITTEE_PERIOD</span>
+    <span class="n">update_period</span> <span class="o">=</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">update</span><span class="p">.</span><span class="n">header</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span> <span class="o">//</span> <span class="n">EPOCHS_PER_SYNC_COMMITTEE_PERIOD</span>
+    <span class="k">if</span> <span class="n">update_period</span> <span class="o">==</span> <span class="n">snapshot_period</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">snapshot</span><span class="p">.</span><span class="n">current_sync_committee</span> <span class="o">=</span> <span class="n">snapshot</span><span class="p">.</span><span class="n">next_sync_committee</span>
+        <span class="n">snapshot</span><span class="p">.</span><span class="n">next_sync_committee</span> <span class="o">=</span> <span class="n">update</span><span class="p">.</span><span class="n">next_sync_committee</span>
+    <span class="n">snapshot</span><span class="p">.</span><span class="n">header</span> <span class="o">=</span> <span class="n">update</span><span class="p">.</span><span class="n">header</span>
+</code></pre></div></div>
+
+<h4 id="process_light_client_update"><code class="language-plaintext highlighter-rouge">process_light_client_update</code></h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">process_light_client_update</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">LightClientStore</span><span class="p">,</span> <span class="n">update</span><span class="p">:</span> <span class="n">LightClientUpdate</span><span class="p">,</span> <span class="n">current_slot</span><span class="p">:</span> <span class="n">Slot</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="c1"># Validate update
+</span>    <span class="k">assert</span> <span class="n">is_valid_light_client_update</span><span class="p">(</span><span class="n">store</span><span class="p">.</span><span class="n">snapshot</span><span class="p">,</span> <span class="n">update</span><span class="p">)</span>
+    <span class="n">store</span><span class="p">.</span><span class="n">valid_updates</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">update</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">sum</span><span class="p">(</span><span class="n">update</span><span class="p">.</span><span class="n">sync_committee_bits</span><span class="p">)</span> <span class="o">*</span> <span class="mi">3</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">update</span><span class="p">.</span><span class="n">sync_committee_bits</span><span class="p">)</span> <span class="o">*</span> <span class="mi">2</span> <span class="ow">and</span> <span class="n">update</span><span class="p">.</span><span class="n">header</span> <span class="o">!=</span> <span class="n">update</span><span class="p">.</span><span class="n">finality_header</span><span class="p">:</span>
+        <span class="c1"># Apply update if 2/3 quorum is reached and we have a finality proof
+</span>        <span class="n">apply_light_client_update</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="n">update</span><span class="p">)</span>
+        <span class="n">store</span><span class="p">.</span><span class="n">valid_updates</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">elif</span> <span class="n">current_slot</span> <span class="o">&gt;</span> <span class="n">snapshot</span><span class="p">.</span><span class="n">header</span><span class="p">.</span><span class="n">slot</span> <span class="o">+</span> <span class="n">LIGHT_CLIENT_UPDATE_TIMEOUT</span><span class="p">:</span>
+        <span class="c1"># Forced best update when the update timeout has elapsed
+</span>        <span class="n">apply_light_client_update</span><span class="p">(</span><span class="n">store</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="n">store</span><span class="p">.</span><span class="n">valid_updates</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">update</span><span class="p">:</span> <span class="nb">sum</span><span class="p">(</span><span class="n">update</span><span class="p">.</span><span class="n">sync_committee_bits</span><span class="p">)))</span>
+        <span class="n">store</span><span class="p">.</span><span class="n">valid_updates</span> <span class="o">=</span> <span class="p">[]</span>
+</code></pre></div></div>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

@@ -1,0 +1,68 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="epoch-processing-tests">Epoch processing tests</h1>
+
+<p>The different epoch sub-transitions are tested individually with test handlers.
+The format is similar to block-processing state-transition tests.
+There is no “change” factor however, the transitions are pure functions with just the pre-state as input.
+Hence, the format is shared between each test-handler. (See test condition documentation on how to run the tests.)</p>
+
+<h2 id="test-case-format">Test case format</h2>
+
+<h3 id="metayaml"><code class="language-plaintext highlighter-rouge">meta.yaml</code></h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">description</span><span class="pi">:</span> <span class="s">string    -- Optional description of test case, purely for debugging purposes.</span>
+                          <span class="s">Tests should use the directory name of the test case as identifier, not the description.</span>
+<span class="na">bls_setting</span><span class="pi">:</span> <span class="s">int       -- see general test-format spec.</span>
+</code></pre></div></div>
+
+<h3 id="preyaml"><code class="language-plaintext highlighter-rouge">pre.yaml</code></h3>
+
+<p>A YAML-encoded <code class="language-plaintext highlighter-rouge">BeaconState</code>, the state before running the epoch sub-transition.</p>
+
+<p>Also available as <code class="language-plaintext highlighter-rouge">pre.ssz</code>.</p>
+
+<h3 id="postyaml"><code class="language-plaintext highlighter-rouge">post.yaml</code></h3>
+
+<p>A YAML-encoded <code class="language-plaintext highlighter-rouge">BeaconState</code>, the state after applying the epoch sub-transition.</p>
+
+<p>Also available as <code class="language-plaintext highlighter-rouge">post.ssz</code>.</p>
+
+<h2 id="condition">Condition</h2>
+
+<p>A handler of the <code class="language-plaintext highlighter-rouge">epoch_processing</code> test-runner should process these cases, 
+ calling the corresponding processing implementation (same name, prefixed with <code class="language-plaintext highlighter-rouge">process_</code>).
+This excludes the other parts of the epoch-transition.
+The provided pre-state is already transitioned to just before the specific sub-transition of focus of the handler.</p>
+
+<p>Sub-transitions:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">justification_and_finalization</code></li>
+  <li><code class="language-plaintext highlighter-rouge">rewards_and_penalties</code> (limited to <code class="language-plaintext highlighter-rouge">minimal</code> config)</li>
+  <li><code class="language-plaintext highlighter-rouge">registry_updates</code></li>
+  <li><code class="language-plaintext highlighter-rouge">slashings</code></li>
+  <li><code class="language-plaintext highlighter-rouge">final_updates</code></li>
+</ul>
+
+<p>The resulting state should match the expected <code class="language-plaintext highlighter-rouge">post</code> state.</p>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

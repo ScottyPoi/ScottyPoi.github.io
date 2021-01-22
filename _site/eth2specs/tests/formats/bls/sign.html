@@ -1,0 +1,37 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="test-format-bls-sign-message">Test format: BLS sign message</h1>
+
+<p>Message signing with BLS should produce a signature.</p>
+
+<h2 id="test-case-format">Test case format</h2>
+
+<p>The test data is declared in a <code class="language-plaintext highlighter-rouge">data.yaml</code> file:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">input</span><span class="pi">:</span>
+  <span class="na">privkey</span><span class="pi">:</span> <span class="s">bytes32 -- the private key used for signing</span>
+  <span class="na">message</span><span class="pi">:</span> <span class="s">bytes32 -- input message to sign (a hash)</span>
+<span class="na">output</span><span class="pi">:</span> <span class="s">BLS Signature -- expected output, single BLS signature or empty.</span>
+</code></pre></div></div>
+
+<p>All byte(s) fields are encoded as strings, hexadecimal encoding, prefixed with <code class="language-plaintext highlighter-rouge">0x</code>.</p>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

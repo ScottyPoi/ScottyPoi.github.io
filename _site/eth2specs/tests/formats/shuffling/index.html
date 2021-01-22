@@ -1,0 +1,61 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="test-format-shuffling">Test format: shuffling</h1>
+
+<p>The runner of the Shuffling test type has only one handler: <code class="language-plaintext highlighter-rouge">core</code>.</p>
+
+<p>However, this does not mean that testing is limited.
+Clients may take different approaches to shuffling, for optimizing,
+ and supporting advanced lookup behavior back in older history.</p>
+
+<p>For implementers, possible test runners implementing testing can include:
+1) Just test permute-index, run it for each index <code class="language-plaintext highlighter-rouge">i</code> in <code class="language-plaintext highlighter-rouge">range(count)</code>, and check against expected <code class="language-plaintext highlighter-rouge">mapping[i]</code> (default spec implementation).
+2) Test un-permute-index (the reverse lookup; implemented by running the shuffling rounds in reverse, from <code class="language-plaintext highlighter-rouge">round_count-1</code> to <code class="language-plaintext highlighter-rouge">0</code>).
+3) Test the optimized complete shuffle, where all indices are shuffled at once; test output in one go.
+4) Test complete shuffle in reverse (reverse rounds, same as #2).</p>
+
+<h2 id="test-case-format">Test case format</h2>
+
+<h3 id="mappingyaml"><code class="language-plaintext highlighter-rouge">mapping.yaml</code></h3>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">seed</span><span class="pi">:</span> <span class="s">bytes32</span>
+<span class="na">count</span><span class="pi">:</span> <span class="s">int</span>
+<span class="na">mapping</span><span class="pi">:</span> <span class="s">List[int]</span>
+</code></pre></div></div>
+
+<ul>
+  <li>The <code class="language-plaintext highlighter-rouge">bytes32</code> is encoded as a string, hexadecimal encoding, prefixed with <code class="language-plaintext highlighter-rouge">0x</code>.</li>
+  <li>Integers are validator indices. These are <code class="language-plaintext highlighter-rouge">uint64</code>, but realistically they are not as big.</li>
+</ul>
+
+<p>The <code class="language-plaintext highlighter-rouge">count</code> specifies the validator registry size. One should compute the shuffling for indices <code class="language-plaintext highlighter-rouge">0, 1, 2, 3, ..., count (exclusive)</code>.</p>
+
+<p>The <code class="language-plaintext highlighter-rouge">seed</code> is the raw shuffling seed, passed to permute-index (or optimized shuffling approach).</p>
+
+<p>The <code class="language-plaintext highlighter-rouge">mapping</code> is a look up array, constructed as <code class="language-plaintext highlighter-rouge">[spec.compute_shuffled_index(i, count, seed) for i in range(count)]</code>
+I.e. <code class="language-plaintext highlighter-rouge">mapping[i]</code> is the shuffled location of <code class="language-plaintext highlighter-rouge">i</code>.</p>
+
+<h2 id="condition">Condition</h2>
+
+<p>The resulting list should match the expected output after shuffling the implied input, using the given <code class="language-plaintext highlighter-rouge">seed</code>.
+The output is checked using the <code class="language-plaintext highlighter-rouge">mapping</code>, based on the shuffling test type (e.g. can be backwards shuffling).</p>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

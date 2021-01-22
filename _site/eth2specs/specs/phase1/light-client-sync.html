@@ -1,0 +1,235 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="minimal-light-client-design">Minimal Light Client Design</h1>
+
+<p><strong>Notice</strong>: This document is a work-in-progress for researchers and implementers.</p>
+
+<h2 id="table-of-contents">Table of contents</h2>
+
+<!-- TOC -->
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+<ul>
+  <li><a href="#introduction">Introduction</a></li>
+  <li><a href="#custom-types">Custom types</a></li>
+  <li><a href="#constants">Constants</a></li>
+  <li><a href="#containers">Containers</a>
+    <ul>
+      <li><a href="#lightclientupdate"><code class="language-plaintext highlighter-rouge">LightClientUpdate</code></a></li>
+    </ul>
+  </li>
+  <li><a href="#helpers">Helpers</a>
+    <ul>
+      <li><a href="#lightclientmemory"><code class="language-plaintext highlighter-rouge">LightClientMemory</code></a></li>
+      <li><a href="#get_persistent_committee_pubkeys_and_balances"><code class="language-plaintext highlighter-rouge">get_persistent_committee_pubkeys_and_balances</code></a></li>
+    </ul>
+  </li>
+  <li><a href="#light-client-state-updates">Light client state updates</a></li>
+  <li><a href="#data-overhead">Data overhead</a></li>
+</ul>
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+<!-- /TOC -->
+
+<h2 id="introduction">Introduction</h2>
+
+<p>Ethereum 2.0 is designed to be light client friendly. This allows low-resource clients such as mobile phones to access Ethereum 2.0 with reasonable safety and liveness. It also facilitates the development of “bridges” to external blockchains. This document suggests a minimal light client design for the beacon chain.</p>
+
+<h2 id="custom-types">Custom types</h2>
+
+<p>We define the following Python custom types for type hinting and readability:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>SSZ equivalent</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">CompactValidator</code></td>
+      <td><code class="language-plaintext highlighter-rouge">uint64</code></td>
+      <td>compact representation of a validator for light clients</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="constants">Constants</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">BEACON_CHAIN_ROOT_IN_SHARD_BLOCK_HEADER_DEPTH</code></td>
+      <td><code class="language-plaintext highlighter-rouge">4</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">BEACON_CHAIN_ROOT_IN_SHARD_BLOCK_HEADER_INDEX</code></td>
+      <td><strong>TBD</strong></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">PERIOD_COMMITTEE_ROOT_IN_BEACON_STATE_DEPTH</code></td>
+      <td><code class="language-plaintext highlighter-rouge">5</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">PERIOD_COMMITTEE_ROOT_IN_BEACON_STATE_INDEX</code></td>
+      <td><strong>TBD</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="containers">Containers</h2>
+
+<h3 id="lightclientupdate"><code class="language-plaintext highlighter-rouge">LightClientUpdate</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">LightClientUpdate</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+    <span class="c1"># Shard block root (and authenticating signature data)
+</span>    <span class="n">shard_block_root</span><span class="p">:</span> <span class="n">Root</span>
+    <span class="n">fork_version</span><span class="p">:</span> <span class="n">Version</span>
+    <span class="n">aggregation_bits</span><span class="p">:</span> <span class="n">Bitlist</span><span class="p">[</span><span class="n">MAX_VALIDATORS_PER_COMMITTEE</span><span class="p">]</span>
+    <span class="n">signature</span><span class="p">:</span> <span class="n">BLSSignature</span>
+    <span class="c1"># Updated beacon header (and authenticating branch)
+</span>    <span class="n">header</span><span class="p">:</span> <span class="n">BeaconBlockHeader</span>
+    <span class="n">header_branch</span><span class="p">:</span> <span class="n">Vector</span><span class="p">[</span><span class="n">Bytes32</span><span class="p">,</span> <span class="n">BEACON_CHAIN_ROOT_IN_SHARD_BLOCK_HEADER_DEPTH</span><span class="p">]</span>
+    <span class="c1"># Updated period committee (and authenticating branch)
+</span>    <span class="n">committee</span><span class="p">:</span> <span class="n">CompactCommittee</span>
+    <span class="n">committee_branch</span><span class="p">:</span> <span class="n">Vector</span><span class="p">[</span><span class="n">Bytes32</span><span class="p">,</span> <span class="n">PERIOD_COMMITTEE_ROOT_IN_BEACON_STATE_DEPTH</span> <span class="o">+</span> <span class="n">log_2</span><span class="p">(</span><span class="n">SHARD_COUNT</span><span class="p">)]</span>
+</code></pre></div></div>
+
+<h2 id="helpers">Helpers</h2>
+
+<h3 id="lightclientmemory"><code class="language-plaintext highlighter-rouge">LightClientMemory</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">@</span><span class="n">dataclass</span>
+<span class="k">class</span> <span class="nc">LightClientMemory</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="n">shard</span><span class="p">:</span> <span class="n">Shard</span>  <span class="c1"># Randomly initialized and retained forever
+</span>    <span class="n">header</span><span class="p">:</span> <span class="n">BeaconBlockHeader</span>  <span class="c1"># Beacon header which is not expected to revert
+</span>    <span class="c1"># period committees corresponding to the beacon header
+</span>    <span class="n">previous_committee</span><span class="p">:</span> <span class="n">CompactCommittee</span>
+    <span class="n">current_committee</span><span class="p">:</span> <span class="n">CompactCommittee</span>
+    <span class="n">next_committee</span><span class="p">:</span> <span class="n">CompactCommittee</span>
+</code></pre></div></div>
+
+<h3 id="get_persistent_committee_pubkeys_and_balances"><code class="language-plaintext highlighter-rouge">get_persistent_committee_pubkeys_and_balances</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">get_persistent_committee_pubkeys_and_balances</span><span class="p">(</span><span class="n">memory</span><span class="p">:</span> <span class="n">LightClientMemory</span><span class="p">,</span>
+                                                  <span class="n">epoch</span><span class="p">:</span> <span class="n">Epoch</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="n">BLSPubkey</span><span class="p">],</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">uint64</span><span class="p">]]:</span>
+    <span class="s">"""
+    Return pubkeys and balances for the persistent committee at ``epoch``.
+    """</span>
+    <span class="n">current_period</span> <span class="o">=</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">memory</span><span class="p">.</span><span class="n">header</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span> <span class="o">//</span> <span class="n">EPOCHS_PER_SHARD_PERIOD</span>
+    <span class="n">next_period</span> <span class="o">=</span> <span class="n">epoch</span> <span class="o">//</span> <span class="n">EPOCHS_PER_SHARD_PERIOD</span>
+    <span class="k">assert</span> <span class="n">next_period</span> <span class="ow">in</span> <span class="p">(</span><span class="n">current_period</span><span class="p">,</span> <span class="n">current_period</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">next_period</span> <span class="o">==</span> <span class="n">current_period</span><span class="p">:</span>
+        <span class="n">earlier_committee</span><span class="p">,</span> <span class="n">later_committee</span> <span class="o">=</span> <span class="n">memory</span><span class="p">.</span><span class="n">previous_committee</span><span class="p">,</span> <span class="n">memory</span><span class="p">.</span><span class="n">current_committee</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">earlier_committee</span><span class="p">,</span> <span class="n">later_committee</span> <span class="o">=</span> <span class="n">memory</span><span class="p">.</span><span class="n">current_committee</span><span class="p">,</span> <span class="n">memory</span><span class="p">.</span><span class="n">next_committee</span>
+
+    <span class="n">pubkeys</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">balances</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">pubkey</span><span class="p">,</span> <span class="n">compact_validator</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">earlier_committee</span><span class="p">.</span><span class="n">pubkeys</span><span class="p">,</span> <span class="n">earlier_committee</span><span class="p">.</span><span class="n">compact_validators</span><span class="p">):</span>
+        <span class="n">index</span><span class="p">,</span> <span class="n">slashed</span><span class="p">,</span> <span class="n">balance</span> <span class="o">=</span> <span class="n">unpack_compact_validator</span><span class="p">(</span><span class="n">compact_validator</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">epoch</span> <span class="o">%</span> <span class="n">EPOCHS_PER_SHARD_PERIOD</span> <span class="o">&lt;</span> <span class="n">index</span> <span class="o">%</span> <span class="n">EPOCHS_PER_SHARD_PERIOD</span><span class="p">:</span>
+            <span class="n">pubkeys</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">pubkey</span><span class="p">)</span>
+            <span class="n">balances</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">balance</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">pubkey</span><span class="p">,</span> <span class="n">compact_validator</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">later_committee</span><span class="p">.</span><span class="n">pubkeys</span><span class="p">,</span> <span class="n">later_committee</span><span class="p">.</span><span class="n">compact_validators</span><span class="p">):</span>
+        <span class="n">index</span><span class="p">,</span> <span class="n">slashed</span><span class="p">,</span> <span class="n">balance</span> <span class="o">=</span> <span class="n">unpack_compact_validator</span><span class="p">(</span><span class="n">compact_validator</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">epoch</span> <span class="o">%</span> <span class="n">EPOCHS_PER_SHARD_PERIOD</span> <span class="o">&gt;=</span> <span class="n">index</span> <span class="o">%</span> <span class="n">EPOCHS_PER_SHARD_PERIOD</span><span class="p">:</span>
+            <span class="n">pubkeys</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">pubkey</span><span class="p">)</span>
+            <span class="n">balances</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">balance</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">pubkeys</span><span class="p">,</span> <span class="n">balances</span>
+</code></pre></div></div>
+
+<h2 id="light-client-state-updates">Light client state updates</h2>
+
+<p>The state of a light client is stored in a <code class="language-plaintext highlighter-rouge">memory</code> object of type <code class="language-plaintext highlighter-rouge">LightClientMemory</code>. To advance its state a light client requests an <code class="language-plaintext highlighter-rouge">update</code> object of type <code class="language-plaintext highlighter-rouge">LightClientUpdate</code> from the network by sending a request containing <code class="language-plaintext highlighter-rouge">(memory.shard, memory.header.slot, slot_range_end)</code> and calls <code class="language-plaintext highlighter-rouge">update_memory(memory, update)</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">update_memory</span><span class="p">(</span><span class="n">memory</span><span class="p">:</span> <span class="n">LightClientMemory</span><span class="p">,</span> <span class="n">update</span><span class="p">:</span> <span class="n">LightClientUpdate</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="c1"># Verify the update does not skip a period
+</span>    <span class="n">current_period</span> <span class="o">=</span> <span class="n">compute_epoch_at_slot</span><span class="p">(</span><span class="n">memory</span><span class="p">.</span><span class="n">header</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span> <span class="o">//</span> <span class="n">EPOCHS_PER_SHARD_PERIOD</span>
+    <span class="n">next_epoch</span> <span class="o">=</span> <span class="n">compute_epoch_of_shard_slot</span><span class="p">(</span><span class="n">update</span><span class="p">.</span><span class="n">header</span><span class="p">.</span><span class="n">slot</span><span class="p">)</span>
+    <span class="n">next_period</span> <span class="o">=</span> <span class="n">next_epoch</span> <span class="o">//</span> <span class="n">EPOCHS_PER_SHARD_PERIOD</span>
+    <span class="k">assert</span> <span class="n">next_period</span> <span class="ow">in</span> <span class="p">(</span><span class="n">current_period</span><span class="p">,</span> <span class="n">current_period</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>  
+
+    <span class="c1"># Verify update header against shard block root and header branch
+</span>    <span class="k">assert</span> <span class="n">is_valid_merkle_branch</span><span class="p">(</span>
+        <span class="n">leaf</span><span class="o">=</span><span class="n">hash_tree_root</span><span class="p">(</span><span class="n">update</span><span class="p">.</span><span class="n">header</span><span class="p">),</span>
+        <span class="n">branch</span><span class="o">=</span><span class="n">update</span><span class="p">.</span><span class="n">header_branch</span><span class="p">,</span>
+        <span class="n">depth</span><span class="o">=</span><span class="n">BEACON_CHAIN_ROOT_IN_SHARD_BLOCK_HEADER_DEPTH</span><span class="p">,</span>
+        <span class="n">index</span><span class="o">=</span><span class="n">BEACON_CHAIN_ROOT_IN_SHARD_BLOCK_HEADER_INDEX</span><span class="p">,</span>
+        <span class="n">root</span><span class="o">=</span><span class="n">update</span><span class="p">.</span><span class="n">shard_block_root</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Verify persistent committee votes pass 2/3 threshold
+</span>    <span class="n">pubkeys</span><span class="p">,</span> <span class="n">balances</span> <span class="o">=</span> <span class="n">get_persistent_committee_pubkeys_and_balances</span><span class="p">(</span><span class="n">memory</span><span class="p">,</span> <span class="n">next_epoch</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="mi">3</span> <span class="o">*</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">i</span><span class="p">:</span> <span class="n">update</span><span class="p">.</span><span class="n">aggregation_bits</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">balances</span><span class="p">))</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="o">*</span> <span class="nb">sum</span><span class="p">(</span><span class="n">balances</span><span class="p">)</span>
+
+    <span class="c1"># Verify shard attestations
+</span>    <span class="n">pubkeys</span> <span class="o">=</span> <span class="nb">filter</span><span class="p">(</span><span class="k">lambda</span> <span class="n">i</span><span class="p">:</span> <span class="n">update</span><span class="p">.</span><span class="n">aggregation_bits</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">pubkeys</span><span class="p">)</span>
+    <span class="n">domain</span> <span class="o">=</span> <span class="n">compute_domain</span><span class="p">(</span><span class="n">DOMAIN_SHARD_ATTESTER</span><span class="p">,</span> <span class="n">update</span><span class="p">.</span><span class="n">fork_version</span><span class="p">)</span>
+    <span class="n">signing_root</span> <span class="o">=</span> <span class="n">compute_signing_root</span><span class="p">(</span><span class="n">update</span><span class="p">.</span><span class="n">shard_block_root</span><span class="p">,</span> <span class="n">domain</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">bls</span><span class="p">.</span><span class="n">FastAggregateVerify</span><span class="p">(</span><span class="n">pubkeys</span><span class="p">,</span> <span class="n">signing_root</span><span class="p">,</span> <span class="n">update</span><span class="p">.</span><span class="n">signature</span><span class="p">)</span>
+
+    <span class="c1"># Update period committees if entering a new period
+</span>    <span class="k">if</span> <span class="n">next_period</span> <span class="o">==</span> <span class="n">current_period</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">is_valid_merkle_branch</span><span class="p">(</span>
+            <span class="n">leaf</span><span class="o">=</span><span class="n">hash_tree_root</span><span class="p">(</span><span class="n">update</span><span class="p">.</span><span class="n">committee</span><span class="p">),</span>
+            <span class="n">branch</span><span class="o">=</span><span class="n">update</span><span class="p">.</span><span class="n">committee_branch</span><span class="p">,</span>
+            <span class="n">depth</span><span class="o">=</span><span class="n">PERIOD_COMMITTEE_ROOT_IN_BEACON_STATE_DEPTH</span> <span class="o">+</span> <span class="n">log_2</span><span class="p">(</span><span class="n">SHARD_COUNT</span><span class="p">),</span>
+            <span class="n">index</span><span class="o">=</span><span class="n">PERIOD_COMMITTEE_ROOT_IN_BEACON_STATE_INDEX</span> <span class="o">&lt;&lt;</span> <span class="n">log_2</span><span class="p">(</span><span class="n">SHARD_COUNT</span><span class="p">)</span> <span class="o">+</span> <span class="n">memory</span><span class="p">.</span><span class="n">shard</span><span class="p">,</span>
+            <span class="n">root</span><span class="o">=</span><span class="n">hash_tree_root</span><span class="p">(</span><span class="n">update</span><span class="p">.</span><span class="n">header</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="n">memory</span><span class="p">.</span><span class="n">previous_committee</span> <span class="o">=</span> <span class="n">memory</span><span class="p">.</span><span class="n">current_committee</span>
+        <span class="n">memory</span><span class="p">.</span><span class="n">current_committee</span> <span class="o">=</span> <span class="n">memory</span><span class="p">.</span><span class="n">next_committee</span>
+        <span class="n">memory</span><span class="p">.</span><span class="n">next_committee</span> <span class="o">=</span> <span class="n">update</span><span class="p">.</span><span class="n">committee</span>
+
+    <span class="c1"># Update header
+</span>    <span class="n">memory</span><span class="p">.</span><span class="n">header</span> <span class="o">=</span> <span class="n">update</span><span class="p">.</span><span class="n">header</span>
+</code></pre></div></div>
+
+<h2 id="data-overhead">Data overhead</h2>
+
+<p>Once every <code class="language-plaintext highlighter-rouge">EPOCHS_PER_SHARD_PERIOD</code> epochs (~27 hours) a light client downloads a <code class="language-plaintext highlighter-rouge">LightClientUpdate</code> object:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">shard_block_root</code>: 32 bytes</li>
+  <li><code class="language-plaintext highlighter-rouge">fork_version</code>: 4 bytes</li>
+  <li><code class="language-plaintext highlighter-rouge">aggregation_bits</code>: 16 bytes</li>
+  <li><code class="language-plaintext highlighter-rouge">signature</code>: 96 bytes</li>
+  <li><code class="language-plaintext highlighter-rouge">header</code>: 8 + 32 + 32 + 32 + 96 = 200 bytes</li>
+  <li><code class="language-plaintext highlighter-rouge">header_branch</code>: 4 * 32 = 128 bytes</li>
+  <li><code class="language-plaintext highlighter-rouge">committee</code>: 128 * (48 + 8) = 7,168 bytes</li>
+  <li><code class="language-plaintext highlighter-rouge">committee_branch</code>: (5 + 10) * 32 = 480 bytes</li>
+</ul>
+
+<p>The total overhead is 8,124 bytes, or ~0.083 bytes per second. The Bitcoin SPV equivalent is 80 bytes per ~560 seconds, or ~0.143 bytes per second. Various compression optimisations (similar to <a href="https://github.com/RCasatta/compressedheaders">these</a>) are possible.</p>
+
+<p>A light client can choose to update the header (without updating the committee) more frequently than once every <code class="language-plaintext highlighter-rouge">EPOCHS_PER_SHARD_PERIOD</code> epochs at a cost of 32 + 4 + 16 + 96 + 200 + 128 = 476 bytes per update.</p>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+

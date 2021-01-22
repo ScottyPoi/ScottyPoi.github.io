@@ -1,0 +1,380 @@
+<h1> SSZ SimpleSerialize </h1>
+<nav>
+    <ul>
+        
+            <li><a href="/" title="SSZ Home Page">Home</a></li>
+        
+            <li><a href="/about" title="What is SSZ">About</a></li>
+        
+            <li><a href="/eth2specs/ssz/simple-serialize" title="SSZ Technical Specifications">Specs</a></li>
+        
+    </ul>
+</nav>
+<p>  </p>
+
+<h1 id="simpleserialize-ssz">SimpleSerialize (SSZ)</h1>
+
+<h2 id="table-of-contents">Table of contents</h2>
+<!-- TOC -->
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+<ul>
+  <li><a href="#constants">Constants</a></li>
+  <li><a href="#typing">Typing</a>
+    <ul>
+      <li><a href="#basic-types">Basic types</a></li>
+      <li><a href="#composite-types">Composite types</a></li>
+      <li><a href="#variable-size-and-fixed-size">Variable-size and fixed-size</a></li>
+      <li><a href="#aliases">Aliases</a></li>
+      <li><a href="#default-values">Default values</a>
+        <ul>
+          <li><a href="#is_zero"><code class="language-plaintext highlighter-rouge">is_zero</code></a></li>
+        </ul>
+      </li>
+      <li><a href="#illegal-types">Illegal types</a></li>
+    </ul>
+  </li>
+  <li><a href="#serialization">Serialization</a>
+    <ul>
+      <li><a href="#uintn"><code class="language-plaintext highlighter-rouge">uintN</code></a></li>
+      <li><a href="#boolean"><code class="language-plaintext highlighter-rouge">boolean</code></a></li>
+      <li><a href="#null"><code class="language-plaintext highlighter-rouge">null</code></a></li>
+      <li><a href="#bitvectorn"><code class="language-plaintext highlighter-rouge">Bitvector[N]</code></a></li>
+      <li><a href="#bitlistn"><code class="language-plaintext highlighter-rouge">Bitlist[N]</code></a></li>
+      <li><a href="#vectors-containers-lists-unions">Vectors, containers, lists, unions</a></li>
+    </ul>
+  </li>
+  <li><a href="#deserialization">Deserialization</a></li>
+  <li><a href="#merkleization">Merkleization</a></li>
+  <li><a href="#summaries-and-expansions">Summaries and expansions</a></li>
+  <li><a href="#implementations">Implementations</a></li>
+</ul>
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+<!-- /TOC -->
+
+<h2 id="constants">Constants</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Value</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">BYTES_PER_CHUNK</code></td>
+      <td><code class="language-plaintext highlighter-rouge">32</code></td>
+      <td>Number of bytes per chunk.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">BYTES_PER_LENGTH_OFFSET</code></td>
+      <td><code class="language-plaintext highlighter-rouge">4</code></td>
+      <td>Number of bytes per serialized length offset.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">BITS_PER_BYTE</code></td>
+      <td><code class="language-plaintext highlighter-rouge">8</code></td>
+      <td>Number of bits per byte.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="typing">Typing</h2>
+<h3 id="basic-types">Basic types</h3>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">uintN</code>: <code class="language-plaintext highlighter-rouge">N</code>-bit unsigned integer (where <code class="language-plaintext highlighter-rouge">N in [8, 16, 32, 64, 128, 256]</code>)</li>
+  <li><code class="language-plaintext highlighter-rouge">boolean</code>: <code class="language-plaintext highlighter-rouge">True</code> or <code class="language-plaintext highlighter-rouge">False</code></li>
+</ul>
+
+<h3 id="composite-types">Composite types</h3>
+
+<ul>
+  <li><strong>container</strong>: ordered heterogeneous collection of values
+    <ul>
+      <li>python dataclass notation with key-type pairs, e.g.
+        <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  <span class="k">class</span> <span class="nc">ContainerExample</span><span class="p">(</span><span class="n">Container</span><span class="p">):</span>
+  <span class="n">foo</span><span class="p">:</span> <span class="n">uint64</span>
+  <span class="n">bar</span><span class="p">:</span> <span class="n">boolean</span>
+</code></pre></div>        </div>
+      </li>
+    </ul>
+  </li>
+  <li><strong>vector</strong>: ordered fixed-length homogeneous collection, with <code class="language-plaintext highlighter-rouge">N</code> values
+    <ul>
+      <li>notation <code class="language-plaintext highlighter-rouge">Vector[type, N]</code>, e.g. <code class="language-plaintext highlighter-rouge">Vector[uint64, N]</code></li>
+    </ul>
+  </li>
+  <li><strong>list</strong>: ordered variable-length homogeneous collection, limited to <code class="language-plaintext highlighter-rouge">N</code> values
+    <ul>
+      <li>notation <code class="language-plaintext highlighter-rouge">List[type, N]</code>, e.g. <code class="language-plaintext highlighter-rouge">List[uint64, N]</code></li>
+    </ul>
+  </li>
+  <li><strong>bitvector</strong>: ordered fixed-length collection of <code class="language-plaintext highlighter-rouge">boolean</code> values, with <code class="language-plaintext highlighter-rouge">N</code> bits
+    <ul>
+      <li>notation <code class="language-plaintext highlighter-rouge">Bitvector[N]</code></li>
+    </ul>
+  </li>
+  <li><strong>bitlist</strong>: ordered variable-length collection of <code class="language-plaintext highlighter-rouge">boolean</code> values, limited to <code class="language-plaintext highlighter-rouge">N</code> bits
+    <ul>
+      <li>notation <code class="language-plaintext highlighter-rouge">Bitlist[N]</code></li>
+    </ul>
+  </li>
+  <li><strong>union</strong>: union type containing one of the given subtypes
+    <ul>
+      <li>notation <code class="language-plaintext highlighter-rouge">Union[type_0, type_1, ...]</code>, e.g. <code class="language-plaintext highlighter-rouge">union[null, uint64]</code></li>
+    </ul>
+  </li>
+</ul>
+
+<p><em>Note</em>: Both <code class="language-plaintext highlighter-rouge">Vector[boolean, N]</code> and <code class="language-plaintext highlighter-rouge">Bitvector[N]</code> are valid, yet distinct due to their different serialization requirements. Similarly, both <code class="language-plaintext highlighter-rouge">List[boolean, N]</code> and <code class="language-plaintext highlighter-rouge">Bitlist[N]</code> are valid, yet distinct. Generally <code class="language-plaintext highlighter-rouge">Bitvector[N]</code>/<code class="language-plaintext highlighter-rouge">Bitlist[N]</code> are preferred because of their serialization efficiencies.</p>
+
+<h3 id="variable-size-and-fixed-size">Variable-size and fixed-size</h3>
+
+<p>We recursively define “variable-size” types to be lists, unions, <code class="language-plaintext highlighter-rouge">Bitlist</code> and all types that contain a variable-size type. All other types are said to be “fixed-size”.</p>
+
+<h3 id="aliases">Aliases</h3>
+
+<p>For convenience we alias:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">bit</code> to <code class="language-plaintext highlighter-rouge">boolean</code></li>
+  <li><code class="language-plaintext highlighter-rouge">byte</code> to <code class="language-plaintext highlighter-rouge">uint8</code> (this is a basic type)</li>
+  <li><code class="language-plaintext highlighter-rouge">BytesN</code> to <code class="language-plaintext highlighter-rouge">Vector[byte, N]</code> (this is <em>not</em> a basic type)</li>
+  <li><code class="language-plaintext highlighter-rouge">null</code>: <code class="language-plaintext highlighter-rouge">{}</code></li>
+</ul>
+
+<h3 id="default-values">Default values</h3>
+<p>Assuming a helper function <code class="language-plaintext highlighter-rouge">default(type)</code> which returns the default value for <code class="language-plaintext highlighter-rouge">type</code>, we can recursively define the default value for all types.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Type</th>
+      <th>Default Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">uintN</code></td>
+      <td><code class="language-plaintext highlighter-rouge">0</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">boolean</code></td>
+      <td><code class="language-plaintext highlighter-rouge">False</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Container</code></td>
+      <td><code class="language-plaintext highlighter-rouge">[default(type) for type in container]</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Vector[type, N]</code></td>
+      <td><code class="language-plaintext highlighter-rouge">[default(type)] * N</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Bitvector[N]</code></td>
+      <td><code class="language-plaintext highlighter-rouge">[False] * N</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">List[type, N]</code></td>
+      <td><code class="language-plaintext highlighter-rouge">[]</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Bitlist[N]</code></td>
+      <td><code class="language-plaintext highlighter-rouge">[]</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Union[type_0, type_1, ...]</code></td>
+      <td><code class="language-plaintext highlighter-rouge">default(type_0)</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h4 id="is_zero"><code class="language-plaintext highlighter-rouge">is_zero</code></h4>
+
+<p>An SSZ object is called zeroed (and thus, <code class="language-plaintext highlighter-rouge">is_zero(object)</code> returns true) if it is equal to the default value for that type.</p>
+
+<h3 id="illegal-types">Illegal types</h3>
+
+<ul>
+  <li>Empty vector types (<code class="language-plaintext highlighter-rouge">Vector[type, 0]</code>, <code class="language-plaintext highlighter-rouge">Bitvector[0]</code>) are illegal.</li>
+  <li>Containers with no fields are illegal.</li>
+  <li>The <code class="language-plaintext highlighter-rouge">null</code> type is only legal as the first type in a union subtype (i.e. with type index zero).</li>
+</ul>
+
+<h2 id="serialization">Serialization</h2>
+
+<p>We recursively define the <code class="language-plaintext highlighter-rouge">serialize</code> function which consumes an object <code class="language-plaintext highlighter-rouge">value</code> (of the type specified) and returns a bytestring of type <code class="language-plaintext highlighter-rouge">bytes</code>.</p>
+
+<p><em>Note</em>: In the function definitions below (<code class="language-plaintext highlighter-rouge">serialize</code>, <code class="language-plaintext highlighter-rouge">hash_tree_root</code>, <code class="language-plaintext highlighter-rouge">is_variable_size</code>, etc.) objects implicitly carry their type.</p>
+
+<h3 id="uintn"><code class="language-plaintext highlighter-rouge">uintN</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">assert</span> <span class="n">N</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">256</span><span class="p">]</span>
+<span class="k">return</span> <span class="n">value</span><span class="p">.</span><span class="n">to_bytes</span><span class="p">(</span><span class="n">N</span> <span class="o">//</span> <span class="n">BITS_PER_BYTE</span><span class="p">,</span> <span class="s">"little"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="boolean"><code class="language-plaintext highlighter-rouge">boolean</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">assert</span> <span class="n">value</span> <span class="ow">in</span> <span class="p">(</span><span class="bp">True</span><span class="p">,</span> <span class="bp">False</span><span class="p">)</span>
+<span class="k">return</span> <span class="s">b"</span><span class="se">\x01</span><span class="s">"</span> <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="bp">True</span> <span class="k">else</span> <span class="s">b"</span><span class="se">\x00</span><span class="s">"</span>
+</code></pre></div></div>
+
+<h3 id="null"><code class="language-plaintext highlighter-rouge">null</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">return</span> <span class="s">b""</span>
+</code></pre></div></div>
+
+<h3 id="bitvectorn"><code class="language-plaintext highlighter-rouge">Bitvector[N]</code></h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">array</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="p">((</span><span class="n">N</span> <span class="o">+</span> <span class="mi">7</span><span class="p">)</span> <span class="o">//</span> <span class="mi">8</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+    <span class="n">array</span><span class="p">[</span><span class="n">i</span> <span class="o">//</span> <span class="mi">8</span><span class="p">]</span> <span class="o">|=</span> <span class="n">value</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="n">i</span> <span class="o">%</span> <span class="mi">8</span><span class="p">)</span>
+<span class="k">return</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">array</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="bitlistn"><code class="language-plaintext highlighter-rouge">Bitlist[N]</code></h3>
+
+<p>Note that from the offset coding, the length (in bytes) of the bitlist is known. An additional <code class="language-plaintext highlighter-rouge">1</code> bit is added to the end, at index <code class="language-plaintext highlighter-rouge">e</code> where <code class="language-plaintext highlighter-rouge">e</code> is the length of the bitlist (not the limit), so that the length in bits will also be known.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">array</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">//</span> <span class="mi">8</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)):</span>
+    <span class="n">array</span><span class="p">[</span><span class="n">i</span> <span class="o">//</span> <span class="mi">8</span><span class="p">]</span> <span class="o">|=</span> <span class="n">value</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="n">i</span> <span class="o">%</span> <span class="mi">8</span><span class="p">)</span>
+<span class="n">array</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">//</span> <span class="mi">8</span><span class="p">]</span> <span class="o">|=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">%</span> <span class="mi">8</span><span class="p">)</span>
+<span class="k">return</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">array</span><span class="p">)</span>
+</code></pre></div></div>
+
+<h3 id="vectors-containers-lists-unions">Vectors, containers, lists, unions</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Recursively serialize
+</span><span class="n">fixed_parts</span> <span class="o">=</span> <span class="p">[</span><span class="n">serialize</span><span class="p">(</span><span class="n">element</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">is_variable_size</span><span class="p">(</span><span class="n">element</span><span class="p">)</span> <span class="k">else</span> <span class="bp">None</span> <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="n">value</span><span class="p">]</span>
+<span class="n">variable_parts</span> <span class="o">=</span> <span class="p">[</span><span class="n">serialize</span><span class="p">(</span><span class="n">element</span><span class="p">)</span> <span class="k">if</span> <span class="n">is_variable_size</span><span class="p">(</span><span class="n">element</span><span class="p">)</span> <span class="k">else</span> <span class="s">b""</span> <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="n">value</span><span class="p">]</span>
+
+<span class="c1"># Compute and check lengths
+</span><span class="n">fixed_lengths</span> <span class="o">=</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">part</span><span class="p">)</span> <span class="k">if</span> <span class="n">part</span> <span class="o">!=</span> <span class="bp">None</span> <span class="k">else</span> <span class="n">BYTES_PER_LENGTH_OFFSET</span> <span class="k">for</span> <span class="n">part</span> <span class="ow">in</span> <span class="n">fixed_parts</span><span class="p">]</span>
+<span class="n">variable_lengths</span> <span class="o">=</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">part</span><span class="p">)</span> <span class="k">for</span> <span class="n">part</span> <span class="ow">in</span> <span class="n">variable_parts</span><span class="p">]</span>
+<span class="k">assert</span> <span class="nb">sum</span><span class="p">(</span><span class="n">fixed_lengths</span> <span class="o">+</span> <span class="n">variable_lengths</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="o">**</span><span class="p">(</span><span class="n">BYTES_PER_LENGTH_OFFSET</span> <span class="o">*</span> <span class="n">BITS_PER_BYTE</span><span class="p">)</span>
+
+<span class="c1"># Interleave offsets of variable-size parts with fixed-size parts
+</span><span class="n">variable_offsets</span> <span class="o">=</span> <span class="p">[</span><span class="n">serialize</span><span class="p">(</span><span class="n">uint32</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">fixed_lengths</span> <span class="o">+</span> <span class="n">variable_lengths</span><span class="p">[:</span><span class="n">i</span><span class="p">])))</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">))]</span>
+<span class="n">fixed_parts</span> <span class="o">=</span> <span class="p">[</span><span class="n">part</span> <span class="k">if</span> <span class="n">part</span> <span class="o">!=</span> <span class="bp">None</span> <span class="k">else</span> <span class="n">variable_offsets</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">part</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">fixed_parts</span><span class="p">)]</span>
+
+<span class="c1"># Return the concatenation of the fixed-size parts (offsets interleaved) with the variable-size parts
+</span><span class="k">return</span> <span class="s">b""</span><span class="p">.</span><span class="n">join</span><span class="p">(</span><span class="n">fixed_parts</span> <span class="o">+</span> <span class="n">variable_parts</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>If <code class="language-plaintext highlighter-rouge">value</code> is a union type:</p>
+
+<p>Define value as an object that has properties <code class="language-plaintext highlighter-rouge">value.value</code> with the contained value, and <code class="language-plaintext highlighter-rouge">value.type_index</code> which indexes the type.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">serialized_bytes</span> <span class="o">=</span> <span class="n">serialize</span><span class="p">(</span><span class="n">value</span><span class="p">.</span><span class="n">value</span><span class="p">)</span>
+<span class="n">serialized_type_index</span> <span class="o">=</span> <span class="n">value</span><span class="p">.</span><span class="n">type_index</span><span class="p">.</span><span class="n">to_bytes</span><span class="p">(</span><span class="n">BYTES_PER_LENGTH_OFFSET</span><span class="p">,</span> <span class="s">"little"</span><span class="p">)</span>
+<span class="k">return</span> <span class="n">serialized_type_index</span> <span class="o">+</span> <span class="n">serialized_bytes</span>
+</code></pre></div></div>
+
+<h2 id="deserialization">Deserialization</h2>
+
+<p>Because serialization is an injective function (i.e. two distinct objects of the same type will serialize to different values) any bytestring has at most one object it could deserialize to.</p>
+
+<p>Deserialization can be implemented using a recursive algorithm. The deserialization of basic objects is easy, and from there we can find a simple recursive algorithm for all fixed-size objects. For variable-size objects we have to do one of the following depending on what kind of object it is:</p>
+
+<ul>
+  <li>Vector/list of a variable-size object: The serialized data will start with offsets of all the serialized objects (<code class="language-plaintext highlighter-rouge">BYTES_PER_LENGTH_OFFSET</code> bytes each).
+    <ul>
+      <li>Using the first offset, we can compute the length of the list (divide by <code class="language-plaintext highlighter-rouge">BYTES_PER_LENGTH_OFFSET</code>), as it gives us the total number of bytes in the offset data.</li>
+      <li>The size of each object in the vector/list can be inferred from the difference of two offsets. To get the size of the last object, the total number of bytes has to be known (it is not generally possible to deserialize an SSZ object of unknown length)</li>
+    </ul>
+  </li>
+  <li>Containers follow the same principles as vectors, with the difference that there may be fixed-size objects in a container as well. This means the <code class="language-plaintext highlighter-rouge">fixed_parts</code> data will contain offsets as well as fixed-size objects.</li>
+  <li>In the case of bitlists, the length in bits cannot be uniquely inferred from the number of bytes in the object. Because of this, they have a bit at the end that is always set. This bit has to be used to infer the size of the bitlist in bits.</li>
+</ul>
+
+<p>Note that deserialization requires hardening against invalid inputs. A non-exhaustive list:</p>
+
+<ul>
+  <li>Offsets: out of order, out of range, mismatching minimum element size.</li>
+  <li>Scope: Extra unused bytes, not aligned with element size.</li>
+  <li>More elements than a list limit allows. Part of enforcing consensus.</li>
+</ul>
+
+<p>Efficient algorithms for computing this object can be found in <a href="#implementations">the implementations</a>.</p>
+
+<h2 id="merkleization">Merkleization</h2>
+
+<p>We first define helper functions:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">size_of(B)</code>, where <code class="language-plaintext highlighter-rouge">B</code> is a basic type: the length, in bytes, of the serialized form of the basic type.</li>
+  <li><code class="language-plaintext highlighter-rouge">chunk_count(type)</code>: calculate the amount of leafs for merkleization of the type.
+    <ul>
+      <li>all basic types: <code class="language-plaintext highlighter-rouge">1</code></li>
+      <li><code class="language-plaintext highlighter-rouge">Bitlist[N]</code> and <code class="language-plaintext highlighter-rouge">Bitvector[N]</code>: <code class="language-plaintext highlighter-rouge">(N + 255) // 256</code> (dividing by chunk size, rounding up)</li>
+      <li><code class="language-plaintext highlighter-rouge">List[B, N]</code> and <code class="language-plaintext highlighter-rouge">Vector[B, N]</code>, where <code class="language-plaintext highlighter-rouge">B</code> is a basic type: <code class="language-plaintext highlighter-rouge">(N * size_of(B) + 31) // 32</code> (dividing by chunk size, rounding up)</li>
+      <li><code class="language-plaintext highlighter-rouge">List[C, N]</code> and <code class="language-plaintext highlighter-rouge">Vector[C, N]</code>, where <code class="language-plaintext highlighter-rouge">C</code> is a composite type: <code class="language-plaintext highlighter-rouge">N</code></li>
+      <li>containers: <code class="language-plaintext highlighter-rouge">len(fields)</code></li>
+    </ul>
+  </li>
+  <li><code class="language-plaintext highlighter-rouge">pack(values)</code>: Given ordered objects of the same basic type:
+    <ol>
+      <li>Serialize <code class="language-plaintext highlighter-rouge">values</code> into bytes.</li>
+      <li>If not aligned to a multiple of <code class="language-plaintext highlighter-rouge">BYTES_PER_CHUNK</code> bytes, right-pad with zeroes to the next multiple.</li>
+      <li>Partition the bytes into <code class="language-plaintext highlighter-rouge">BYTES_PER_CHUNK</code>-byte chunks.</li>
+      <li>Return the chunks.</li>
+    </ol>
+  </li>
+  <li><code class="language-plaintext highlighter-rouge">pack_bits(bits)</code>: Given the bits of bitlist or bitvector, get <code class="language-plaintext highlighter-rouge">bitfield_bytes</code> by packing them in bytes and aligning to the start. The length-delimiting bit for bitlists is excluded. Then return <code class="language-plaintext highlighter-rouge">pack(bitfield_bytes)</code>.</li>
+  <li><code class="language-plaintext highlighter-rouge">next_pow_of_two(i)</code>: get the next power of 2 of <code class="language-plaintext highlighter-rouge">i</code>, if not already a power of 2, with 0 mapping to 1. Examples: <code class="language-plaintext highlighter-rouge">0-&gt;1, 1-&gt;1, 2-&gt;2, 3-&gt;4, 4-&gt;4, 6-&gt;8, 9-&gt;16</code></li>
+  <li><code class="language-plaintext highlighter-rouge">merkleize(chunks, limit=None)</code>: Given ordered <code class="language-plaintext highlighter-rouge">BYTES_PER_CHUNK</code>-byte chunks, merkleize the chunks, and return the root:
+    <ul>
+      <li>The merkleization depends on the effective input, which must be padded/limited:
+        <ul>
+          <li>if no limit: pad the <code class="language-plaintext highlighter-rouge">chunks</code> with zeroed chunks to <code class="language-plaintext highlighter-rouge">next_pow_of_two(len(chunks))</code> (virtually for memory efficiency).</li>
+          <li>if <code class="language-plaintext highlighter-rouge">limit &gt;= len(chunks)</code>, pad the <code class="language-plaintext highlighter-rouge">chunks</code> with zeroed chunks to <code class="language-plaintext highlighter-rouge">next_pow_of_two(limit)</code> (virtually for memory efficiency).</li>
+          <li>if <code class="language-plaintext highlighter-rouge">limit &lt; len(chunks)</code>: do not merkleize, input exceeds limit. Raise an error instead.</li>
+        </ul>
+      </li>
+      <li>Then, merkleize the chunks (empty input is padded to 1 zero chunk):
+        <ul>
+          <li>If <code class="language-plaintext highlighter-rouge">1</code> chunk: the root is the chunk itself.</li>
+          <li>If <code class="language-plaintext highlighter-rouge">&gt; 1</code> chunks: merkleize as binary tree.</li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li><code class="language-plaintext highlighter-rouge">mix_in_length</code>: Given a Merkle root <code class="language-plaintext highlighter-rouge">root</code> and a length <code class="language-plaintext highlighter-rouge">length</code> (<code class="language-plaintext highlighter-rouge">"uint256"</code> little-endian serialization) return <code class="language-plaintext highlighter-rouge">hash(root + length)</code>.</li>
+  <li><code class="language-plaintext highlighter-rouge">mix_in_type</code>: Given a Merkle root <code class="language-plaintext highlighter-rouge">root</code> and a type_index <code class="language-plaintext highlighter-rouge">type_index</code> (<code class="language-plaintext highlighter-rouge">"uint256"</code> little-endian serialization) return <code class="language-plaintext highlighter-rouge">hash(root + type_index)</code>.</li>
+</ul>
+
+<p>We now define Merkleization <code class="language-plaintext highlighter-rouge">hash_tree_root(value)</code> of an object <code class="language-plaintext highlighter-rouge">value</code> recursively:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">merkleize(pack(value))</code> if <code class="language-plaintext highlighter-rouge">value</code> is a basic object or a vector of basic objects.</li>
+  <li><code class="language-plaintext highlighter-rouge">merkleize(pack_bits(value), limit=chunk_count(type))</code> if <code class="language-plaintext highlighter-rouge">value</code> is a bitvector.</li>
+  <li><code class="language-plaintext highlighter-rouge">mix_in_length(merkleize(pack(value), limit=chunk_count(type)), len(value))</code> if <code class="language-plaintext highlighter-rouge">value</code> is a list of basic objects.</li>
+  <li><code class="language-plaintext highlighter-rouge">mix_in_length(merkleize(pack_bits(value), limit=chunk_count(type)), len(value))</code> if <code class="language-plaintext highlighter-rouge">value</code> is a bitlist.</li>
+  <li><code class="language-plaintext highlighter-rouge">merkleize([hash_tree_root(element) for element in value])</code> if <code class="language-plaintext highlighter-rouge">value</code> is a vector of composite objects or a container.</li>
+  <li><code class="language-plaintext highlighter-rouge">mix_in_length(merkleize([hash_tree_root(element) for element in value], limit=chunk_count(type)), len(value))</code> if <code class="language-plaintext highlighter-rouge">value</code> is a list of composite objects.</li>
+  <li><code class="language-plaintext highlighter-rouge">mix_in_type(merkleize(value.value), value.type_index)</code> if <code class="language-plaintext highlighter-rouge">value</code> is of union type.</li>
+</ul>
+
+<h2 id="summaries-and-expansions">Summaries and expansions</h2>
+
+<p>Let <code class="language-plaintext highlighter-rouge">A</code> be an object derived from another object <code class="language-plaintext highlighter-rouge">B</code> by replacing some of the (possibly nested) values of <code class="language-plaintext highlighter-rouge">B</code> by their <code class="language-plaintext highlighter-rouge">hash_tree_root</code>. We say <code class="language-plaintext highlighter-rouge">A</code> is a “summary” of <code class="language-plaintext highlighter-rouge">B</code>, and that <code class="language-plaintext highlighter-rouge">B</code> is an “expansion” of <code class="language-plaintext highlighter-rouge">A</code>. Notice <code class="language-plaintext highlighter-rouge">hash_tree_root(A) == hash_tree_root(B)</code>.</p>
+
+<p>We similarly define “summary types” and “expansion types”. For example, <a href="/eth2specs/specs/phase0/beacon-chain.html#beaconblock"><code class="language-plaintext highlighter-rouge">BeaconBlock</code></a> is an expansion type of <a href="/eth2specs/specs/phase0/beacon-chain.html#beaconblockheader"><code class="language-plaintext highlighter-rouge">BeaconBlockHeader</code></a>. Notice that objects expand to at most one object of a given expansion type. For example, <code class="language-plaintext highlighter-rouge">BeaconBlockHeader</code> objects uniquely expand to <code class="language-plaintext highlighter-rouge">BeaconBlock</code> objects.</p>
+
+<h2 id="implementations">Implementations</h2>
+
+<p>See https://github.com/ethereum/eth2.0-specs/issues/2138 for a list of current known implementations.</p>
+
+
+
+<p>
+	<strong> SSZ SimpleSerialize for Eth2 </strong>
+</p>
+
+
