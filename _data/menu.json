@@ -18,6 +18,16 @@ pages: [
         name: 'Implementation',
         url: '/implementation',
         title: 'SSZ Implementation List'
+    },
+    {
+        name: 'Merkle Proofs',
+        url: '/eth2specs/ssz/merkle-proofs',
+        title: 'Merkle Proof Formats'
+    },
+    {
+        name: 'Demonstration',
+        url: '/demo',
+        title: 'Playground'
     }
 
 ] 
