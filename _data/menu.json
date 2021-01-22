@@ -8,6 +8,11 @@ pages: [
         name: 'About',
         url: '/about',
         title: 'What is SSZ'
+    },
+    {
+        name: 'Specs'
+        url: '/specs'
+        title: 'SSZ Technical Specifications'
     }
 
-]
+] 
