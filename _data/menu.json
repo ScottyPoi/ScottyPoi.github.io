@@ -13,6 +13,11 @@ pages: [
         name: 'Specs',
         url: '/eth2specs/ssz/simple-serialize',
         title: 'SSZ Technical Specifications'
+    },
+    {
+        name: 'Implementation',
+        url: '/implementation',
+        title: 'SSZ Implementation List'
     }
 
 ] 
