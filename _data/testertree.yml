@@ -1,0 +1,34 @@
+bottom:
+  - data: 00
+  - data: 01
+  - data: 10
+  - data: 11
+  - data: 100
+  - data: 101
+  - data: 110
+  - data: 111
+
+
+leaves:
+  - index: 8
+  - index: 9
+  - index: 10
+  - index: 11
+  - index: 12
+  - index: 13
+  - index: 14
+  - index: 15
+
+  
+parents1:
+  - index: 4
+  - index: 5
+  - index: 6
+  - index: 7
+
+parents2:
+  - index: 2
+  - index: 3
+
+root:
+  - index: 1

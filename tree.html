@@ -1,0 +1,59 @@
+---
+layout: page
+strapline: Merkle Tree
+---
+
+</div>
+<div class="container border"></div>
+    <div class="row">
+        <div class="col"></div>
+        {% for leaf in site.data.testertree.root %}
+        <div class="col-6 text-center border bg-danger">
+            <p>{{ leaf.index }}</p>
+        </div>
+        {% endfor %}  
+        <div class="col"></div>
+    </div>  
+    <div class="row">
+        <div class="col"></div>
+        {% for leaf in site.data.testertree.parents2 %}
+        <div class="col"></div>
+
+        <div class="col-3 text-center border bg-warning">
+            <p>{{ leaf.index }}</p>
+        </div>
+        <div class="col"></div>
+        {% endfor %}  
+        <div class="col"></div>
+    </div>  
+
+
+
+    <div class="row">
+        <div class="col"></div>
+        {% for leaf in site.data.testertree.parents1 %}
+        <div class="col"></div>
+        <div class="col-2 text-center border bg-success">
+            <p>{{ leaf.index }}</p>
+        </div>
+        <div class="col"></div>
+        {% endfor %}  
+        <div class="col"></div>
+    </div>  
+
+
+    <div class="row">
+        {% for leaf in site.data.testertree.leaves %}
+        <div class="col text-center border bg-primary">
+            <p>{{ leaf.index }}</p>
+        </div>
+        {% endfor %}  
+    </div>  
+    <div class="row">
+        {% for leaf in site.data.testertree.bottom %}
+        <div class="col text-center border bg-info">
+            <p>{{ leaf.data }}</p>
+        </div>
+        {% endfor %}  
+    </div>  
+</div>

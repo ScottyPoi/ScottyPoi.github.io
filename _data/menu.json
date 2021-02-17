@@ -28,6 +28,11 @@ pages: [
         name: 'Demonstration',
         url: '/demo',
         title: 'Playground'
+    },
+    {
+        name: 'Tree',
+        url: '/tree',
+        title: "Tree"
     }
 
 ] 
